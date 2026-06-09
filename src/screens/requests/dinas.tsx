@@ -1,0 +1,207 @@
+import * as React from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { FieldLabel, PseudoField } from "@/components/ui/field";
+import { Seg } from "@/components/ui/segmented";
+import { Stepper } from "@/components/ui/stepper";
+import { SummaryCard, Row } from "@/components/ui/summary-card";
+import { ScreenHead } from "@/components/screen-head";
+import { SentScaffold } from "@/components/sent-scaffold";
+import { Ic, RIc, bigCheck } from "@/components/icons";
+import { useApp } from "@/app/store";
+import { fmtIDR } from "@/lib/utils";
+
+const DEST = [
+  { v: "Jakarta", jabo: true },
+  { v: "Bogor", jabo: true },
+  { v: "Depok", jabo: true },
+  { v: "Tangerang", jabo: true },
+  { v: "Bekasi", jabo: true },
+  { v: "Bandung", jabo: false },
+  { v: "Semarang", jabo: false },
+  { v: "Surabaya", jabo: false },
+  { v: "Medan", jabo: false },
+];
+
+// ── DINAS · 1 — destination triggers the Jabodetabek perimeter ───
+export function DinasFormScreen() {
+  const navigate = useNavigate();
+  const { addRequest } = useApp();
+  const [dest, setDest] = React.useState("Jakarta");
+  const inside = DEST.find((d) => d.v === dest)!.jabo;
+
+  return (
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
+      <ScreenHead title="Perjalanan Dinas" sub="Tujuan menentukan tunjangan otomatis." close to="/requests" />
+      <FieldLabel upper hint="memicu perimeter Jabodetabek">Tujuan</FieldLabel>
+      <div className="gki-field mb-[14px] !p-0">
+        <span className="text-muted flex pl-[14px]">{Ic.pin}</span>
+        <select
+          value={dest}
+          onChange={(e) => setDest(e.target.value)}
+          className="flex-1 border-none outline-none bg-transparent text-[14.5px] font-sans text-ink font-semibold py-[13px] pr-[14px] pl-2 appearance-none cursor-pointer"
+        >
+          {DEST.map((d) => (
+            <option key={d.v} value={d.v}>
+              {d.v}{d.jabo ? " (Jabodetabek)" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex gap-[10px] mb-[14px]">
+        <div className="flex-1">
+          <FieldLabel upper>Berangkat</FieldLabel>
+          <PseudoField icon={Ic.calendar}>10 Jun</PseudoField>
+        </div>
+        <div className="flex-1">
+          <FieldLabel upper>Kembali</FieldLabel>
+          <PseudoField icon={Ic.calendar}>{inside ? "10 Jun" : "12 Jun"}</PseudoField>
+        </div>
+      </div>
+
+      <div
+        className="flex gap-3 items-center rounded-[14px] px-[15px] py-[14px]"
+        style={{
+          background: inside ? "var(--tint)" : "var(--tint2)",
+          border: inside ? "1px solid var(--line)" : "1px solid var(--primary)",
+        }}
+      >
+        <span className="flex" style={{ color: inside ? "var(--muted)" : "var(--primary)" }}>{RIc.route}</span>
+        <div className="flex-1">
+          <div className="text-[13px] font-extrabold" style={{ color: inside ? "var(--muted)" : "var(--primary)" }}>
+            {inside ? "Dalam Jabodetabek" : "Luar kota — luar Jabodetabek"}
+          </div>
+          <div className="text-[11.5px] text-muted mt-[2px] leading-[1.4]">
+            {inside ? "Tidak memicu tunjangan luar kota." : "Memicu injeksi tunjangan otomatis."}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-4" />
+      <Button
+        variant="primary"
+        onClick={() => {
+          if (inside) {
+            addRequest({ kind: "dinas", title: `Dinas — ${dest}`, detail: "1 hari · dalam Jabodetabek", status: "Menunggu" });
+            navigate("/requests/dinas/sent", { state: { dest, total: 0, nights: 0 } });
+          } else {
+            navigate("/requests/dinas/allowance", { state: { dest } });
+          }
+        }}
+      >
+        {inside ? "Kirim Pengajuan" : "Lanjut ke Tunjangan"}
+      </Button>
+    </div>
+  );
+}
+
+// ── DINAS · 2 — automatic allowance injection ────────────────────
+function AllowRow({ icon, k, sub, v }: { icon: React.ReactNode; k: string; sub: string; v: string }) {
+  return (
+    <div className="flex items-center gap-3 py-3 border-b border-line">
+      <span className="w-[34px] h-[34px] rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-extrabold text-ink">{k}</div>
+        <div className="text-[11px] text-muted">{sub}</div>
+      </div>
+      <span className="text-[13.5px] font-extrabold text-ink tabular-nums">{v}</span>
+    </div>
+  );
+}
+
+const RATES = { meal: 75000, transport: 150000, lodging: 350000 };
+
+export function DinasAllowanceScreen() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { addRequest } = useApp();
+  const dest: string = location.state?.dest ?? "Bandung";
+
+  const [overnight, setOvernight] = React.useState<"none" | "over">("over");
+  const [nights, setNights] = React.useState(2);
+  const isOver = overnight === "over";
+  const transport = RATES.transport * (isOver ? 2 : 1);
+  const meals = isOver ? RATES.meal * (nights + 1) : RATES.meal;
+  const lodging = isOver ? RATES.lodging * nights : 0;
+  const total = transport + meals + lodging;
+
+  return (
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
+      <ScreenHead title="Tunjangan Dinas" sub={`${dest} · luar Jabodetabek`} />
+      <FieldLabel upper>Status menginap</FieldLabel>
+      <div className="mb-[14px]">
+        <Seg
+          value={overnight}
+          onChange={setOvernight}
+          options={[
+            { v: "none", label: "Tanpa Inap", icon: RIc.sun },
+            { v: "over", label: "Wajib Inap", icon: RIc.bed },
+          ]}
+        />
+      </div>
+
+      {isOver && (
+        <div className="flex justify-between items-center bg-tint rounded-[13px] px-4 py-[11px] mb-4">
+          <span className="text-[13px] font-bold text-ink">Jumlah malam</span>
+          <Stepper value={nights} onDec={() => setNights((n) => Math.max(1, n - 1))} onInc={() => setNights((n) => Math.min(7, n + 1))} />
+        </div>
+      )}
+
+      <div
+        className="bg-card rounded-[18px] px-[18px] pt-[6px] pb-4"
+        style={{ border: "1px solid var(--primary)", boxShadow: "0 4px 18px rgba(193,58,214,0.08)" }}
+      >
+        <div className="flex items-center gap-2 pt-[14px] pb-1 text-primary">
+          {RIc.wallet}
+          <span className="text-[13.5px] font-extrabold text-ink">Injeksi tunjangan otomatis</span>
+        </div>
+        <AllowRow icon={RIc.car} k="Transport" sub={isOver ? "PP (2×)" : "Sekali jalan"} v={fmtIDR(transport)} />
+        <AllowRow icon={RIc.food} k="Uang makan" sub={isOver ? `${nights + 1} hari` : "1 hari"} v={fmtIDR(meals)} />
+        {isOver && <AllowRow icon={RIc.bed} k="Akomodasi" sub={`${nights} malam`} v={fmtIDR(lodging)} />}
+        <div className="flex justify-between items-center pt-[14px]">
+          <span className="text-[13.5px] font-extrabold text-ink">Total tunjangan</span>
+          <span className="text-[18px] font-extrabold text-primary tabular-nums">{fmtIDR(total)}</span>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-4" />
+      <Button
+        variant="primary"
+        onClick={() => {
+          addRequest({
+            kind: "dinas",
+            title: `Dinas — ${dest}`,
+            detail: isOver ? `${nights} mlm · ${fmtIDR(total)}` : `1 hari · ${fmtIDR(total)}`,
+            status: "Menunggu",
+          });
+          navigate("/requests/dinas/sent", { state: { dest, total, nights: isOver ? nights : 0 } });
+        }}
+      >
+        Kirim Pengajuan
+      </Button>
+    </div>
+  );
+}
+
+// ── DINAS · 3 — sent ─────────────────────────────────────────────
+export function DinasSentScreen() {
+  const location = useLocation();
+  const dest: string = location.state?.dest ?? "Bandung";
+  const total: number = location.state?.total ?? 1025000;
+  const nights: number = location.state?.nights ?? 2;
+  return (
+    <SentScaffold
+      icon={bigCheck}
+      title="Pengajuan dinas terkirim"
+      sub="Tunjangan akan dicairkan setelah disetujui Koordinator Personalia."
+    >
+      <SummaryCard>
+        <Row k="Tujuan" v={dest} />
+        <Row k="Durasi" v={nights > 0 ? `${nights + 1} hari · ${nights} malam` : "1 hari"} />
+        <Row k="Total tunjangan" v={total > 0 ? fmtIDR(total) : "—"} />
+        <Row k="Status" v="Menunggu persetujuan" last />
+      </SummaryCard>
+    </SentScaffold>
+  );
+}

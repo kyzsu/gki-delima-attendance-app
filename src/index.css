@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+/* ── GKI Delima design tokens (from design handoff) ─────────────── */
+:root {
+  --grad: linear-gradient(135deg, #8e2de2 0%, #c13ad6 48%, #f0529c 100%);
+  --grad-hero: linear-gradient(160deg, #7e25d6 0%, #b832c9 46%, #f0529c 100%);
+  --primary: #c13ad6;
+  --glow: rgba(193, 58, 214, 0.38);
+
+  --bg: #fbf6fb;
+  --card: #ffffff;
+  --tint: #f6ecf7;
+  --tint2: #f3ddf4;
+  --input: #f7eff8;
+  --line: #ecdded;
+  --line2: #d9c2dc;
+  --text: #2d1b33;
+  --muted: #8a7790;
+
+  --danger: #c23a57;
+  --danger-soft: #fce7ec;
+  --danger-dot: #e0556e;
+  --warn: #a86a1a;
+  --warn-soft: #fbf0dc;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-tint: var(--tint);
+  --color-tint2: var(--tint2);
+  --color-input: var(--input);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-dot: var(--danger-dot);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; min-height: 100%; }
+body {
+  font-family: var(--font-sans);
+  background: #efe9ef;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Phone-width column on desktop, full screen on mobile */
+.app-shell {
+  max-width: 430px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  background: var(--bg);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 60px rgba(60, 10, 60, 0.10);
+}
+
+/* ── form field ── */
+.gki-field {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--input);
+  border: 1.5px solid var(--line);
+  border-radius: 14px; padding: 13px 14px;
+  transition: border-color .16s, box-shadow .16s, background .16s;
+}
+.gki-field:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(193, 58, 214, 0.10);
+  background: #fff;
+}
+
+/* ── animations ── */
+.gki-pulse {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--primary);
+  box-shadow: 0 0 0 0 rgba(193,58,214,0.5); animation: gkipulse 1.6s infinite;
+}
+@keyframes gkipulse {
+  0% { box-shadow: 0 0 0 0 rgba(193,58,214,0.45); }
+  70% { box-shadow: 0 0 0 8px rgba(193,58,214,0); }
+  100% { box-shadow: 0 0 0 0 rgba(193,58,214,0); }
+}
+
+.gki-userwave {
+  position: absolute; inset: 0; margin: auto; width: 18px; height: 18px;
+  border-radius: 50%; border: 2px solid var(--primary);
+  animation: gkiwave 1.8s ease-out infinite;
+}
+@keyframes gkiwave {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+
+.gki-scanring { animation: gkispin 7s linear infinite; }
+@keyframes gkispin { to { transform: rotate(360deg); } }
+.gki-scanline {
+  position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #fff, transparent);
+  box-shadow: 0 0 12px rgba(255,255,255,0.8);
+  animation: gkiscan 2.4s ease-in-out infinite;
+}
+@keyframes gkiscan {
+  0%, 100% { top: 16px; opacity: 0.4; }
+  50% { top: 200px; opacity: 1; }
+}
+
+.gki-pop { animation: gkipop .5s cubic-bezier(.2,1.3,.4,1) both; }
+@keyframes gkipop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+
+.sk { position: relative; overflow: hidden; background: #eee0f0; }
+.sk::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
+  animation: skshimmer 1.5s infinite;
+}
+@keyframes skshimmer { 100% { transform: translateX(100%); } }
+
+.gki-radar {
+  position: absolute; left: 50%; top: 50%; width: 34px; height: 34px;
+  margin: -17px 0 0 -17px; border-radius: 50%; background: rgba(193,58,214,0.22);
+  animation: gkiradar 2.4s ease-out infinite;
+}
+@keyframes gkiradar {
+  0% { transform: scale(0.4); opacity: 0.85; }
+  100% { transform: scale(4.4); opacity: 0; }
+}
+
+.gki-spin {
+  width: 16px; height: 16px; border-radius: 50%; display: inline-block;
+  border: 2.5px solid rgba(255,255,255,0.85); border-right-color: transparent;
+  animation: gkispin2 .7s linear infinite;
+}
+@keyframes gkispin2 { to { transform: rotate(360deg); } }
+
+.gki-noscroll::-webkit-scrollbar { display: none; }
+.gki-noscroll { scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gki-pulse, .gki-userwave, .gki-scanring, .gki-scanline,
+  .sk::after, .gki-radar, .gki-pop { animation: none; }
+}
