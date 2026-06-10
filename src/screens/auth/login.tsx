@@ -19,8 +19,8 @@ export function LoginScreen() {
     setBusy(true);
     setError(null);
     try {
-      await login(email, password);
-      navigate("/home");
+      const user = await login(email, password);
+      navigate(user.role === "admin" ? "/admin" : "/home");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
       setBusy(false);

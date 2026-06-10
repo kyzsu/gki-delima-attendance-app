@@ -24,6 +24,7 @@ import { HistoryScreen } from "@/screens/attendance/history";
 import { ProfileScreen } from "@/screens/attendance/profile";
 
 import { RequestHubScreen } from "@/screens/requests/hub";
+import { AdminPanelScreen } from "@/screens/admin/panel";
 import {
   CutiFormScreen,
   CutiSakitScreen,
@@ -60,6 +61,15 @@ function RequireAuth() {
   const { ready, authed } = useApp();
   if (!ready) return null;
   if (!authed) return <Navigate to="/login" replace />;
+  return <Outlet />;
+}
+
+/** Admin-only screens; non-admins are bounced to the dashboard. */
+function RequireAdmin() {
+  const { ready, authed, user } = useApp();
+  if (!ready) return null;
+  if (!authed) return <Navigate to="/login" replace />;
+  if (user.role !== "admin") return <Navigate to="/home" replace />;
   return <Outlet />;
 }
 
@@ -111,6 +121,10 @@ const router = createBrowserRouter([
           { path: "/history", element: <HistoryScreen /> },
           { path: "/profile", element: <ProfileScreen /> },
         ],
+      },
+      {
+        element: <RequireAdmin />,
+        children: [{ path: "/admin", element: <AdminPanelScreen /> }],
       },
     ],
   },

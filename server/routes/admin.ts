@@ -36,11 +36,28 @@ adminRouter.post("/users/:id/decision", async (req, res) => {
 
 adminRouter.get("/requests", async (req, res) => {
   const status = req.query.status;
+  type Row = RequestRow & { user_name: string };
   const rows =
     typeof status === "string"
-      ? await sql<RequestRow[]>`SELECT * FROM requests WHERE status = ${status} ORDER BY id DESC`
-      : await sql<RequestRow[]>`SELECT * FROM requests ORDER BY id DESC`;
-  res.json(rows);
+      ? await sql<Row[]>`
+          SELECT r.*, u.name AS user_name FROM requests r
+          JOIN users u ON u.id = r.user_id
+          WHERE r.status = ${status} ORDER BY r.id DESC`
+      : await sql<Row[]>`
+          SELECT r.*, u.name AS user_name FROM requests r
+          JOIN users u ON u.id = r.user_id
+          ORDER BY r.id DESC`;
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      title: r.title,
+      detail: r.detail,
+      status: r.status,
+      createdAt: r.created_at,
+      userName: r.user_name,
+    })),
+  );
 });
 
 const reqDecisionSchema = z.object({ decision: z.enum(["Disetujui", "Ditolak"]) });
