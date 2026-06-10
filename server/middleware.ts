@@ -45,6 +45,7 @@ export function publicUser(u: UserRow) {
     email: u.email,
     phone: u.phone,
     role: u.role,
+    position: u.position,
     status: u.status,
     leaveBalance: u.leave_balance,
   };

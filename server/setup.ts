@@ -21,6 +21,20 @@ async function main() {
   console.log("Applying schema…");
   await sql.unsafe(readFileSync(path.join(here, "schema.sql"), "utf8"));
 
+  // Migrations for databases created before Pasal 5 support — all idempotent.
+  console.log("Applying migrations…");
+  await sql.unsafe(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS position TEXT NOT NULL DEFAULT 'tata_usaha';
+    ALTER TABLE attendance ADD COLUMN IF NOT EXISTS shift INT NOT NULL DEFAULT 0;
+    ALTER TABLE attendance ADD COLUMN IF NOT EXISTS early_out BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE attendance ADD COLUMN IF NOT EXISTS special BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE attendance ADD COLUMN IF NOT EXISTS worked_minutes INT;
+    ALTER TABLE attendance DROP CONSTRAINT IF EXISTS attendance_user_id_date_key;
+    CREATE UNIQUE INDEX IF NOT EXISTS attendance_user_date_shift ON attendance (user_id, date, shift);
+    UPDATE requests SET leave_type = 'izin' WHERE leave_type = 'darurat';
+    UPDATE requests SET leave_type = 'duka_ortu' WHERE leave_type = 'duka';
+  `);
+
   const [admin] = await sql`SELECT id FROM users WHERE email = ${ADMIN_EMAIL.toLowerCase()}`;
   if (admin) {
     console.log(`Admin ${ADMIN_EMAIL} already exists — skipping seed.`);

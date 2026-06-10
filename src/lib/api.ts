@@ -39,6 +39,20 @@ async function request<T>(path: string, init?: RequestInit & { json?: unknown })
 }
 
 // ── Types (mirror the server responses) ──────────────────────────
+export type Position = "tata_usaha" | "sopir" | "koster";
+
+export type LeaveType =
+  | "tahunan"
+  | "sakit"
+  | "izin"
+  | "duka_inti"
+  | "duka_ortu"
+  | "menikah"
+  | "menikahkan_anak"
+  | "baptis_khitan"
+  | "istri_melahirkan"
+  | "melahirkan";
+
 export interface ApiUser {
   id: number;
   name: string;
@@ -46,6 +60,7 @@ export interface ApiUser {
   email: string;
   phone: string;
   role: "employee" | "admin";
+  position: Position;
   status: "pending" | "approved" | "rejected";
   leaveBalance: number;
 }
@@ -53,15 +68,28 @@ export interface ApiUser {
 export interface ApiToday {
   checkIn: string;
   checkOut: string | null;
+  shift: number;
   late: boolean;
+  special: boolean;
   distanceM: number | null;
 }
 
 export interface ApiLogEntry {
   date: string; // YYYY-MM-DD
+  shift: number;
   checkIn: string;
   checkOut: string | null;
   late: boolean;
+  earlyOut: boolean;
+  special: boolean;
+  workedMinutes: number | null;
+}
+
+export interface ApiAbsence {
+  date: string;
+  userId: number;
+  userName: string;
+  position: string;
 }
 
 export interface ApiRequest {
@@ -100,26 +128,42 @@ export const api = {
   login: (email: string, password: string) =>
     request<{ token: string; user: ApiUser }>("/auth/login", { method: "POST", json: { email, password } }),
 
-  me: () => request<{ user: ApiUser; today: ApiToday | null }>("/auth/me"),
+  me: () =>
+    request<{
+      user: ApiUser;
+      today: ApiToday | null;
+      todayDone: boolean;
+      remainingShifts: number | null;
+    }>("/auth/me"),
 
   checkIn: (loc: Coords) =>
-    request<{ checkIn: string; late: boolean; distanceM: number }>("/attendance/check-in", {
-      method: "POST",
-      json: loc,
-    }),
+    request<{
+      checkIn: string;
+      shift: number;
+      shiftStart: string | null;
+      late: boolean;
+      special: boolean;
+      distanceM: number;
+    }>("/attendance/check-in", { method: "POST", json: loc }),
 
   checkOut: (loc: Coords) =>
-    request<{ checkIn: string; checkOut: string; workedMs: number; distanceM: number }>(
-      "/attendance/check-out",
-      { method: "POST", json: loc },
-    ),
+    request<{
+      checkIn: string;
+      checkOut: string;
+      shift: number;
+      workedMs: number;
+      breakDeducted: boolean;
+      earlyOut: boolean;
+      shiftEnd: string | null;
+      distanceM: number;
+    }>("/attendance/check-out", { method: "POST", json: loc }),
 
   attendanceLog: () => request<ApiLogEntry[]>("/attendance/log"),
 
   requests: () => request<ApiRequest[]>("/requests"),
 
   submitCuti: (data: {
-    type: "tahunan" | "sakit" | "darurat" | "duka";
+    type: LeaveType;
     startDate: string;
     days?: number;
     place?: "inCity" | "outside";
@@ -166,4 +210,15 @@ export const api = {
       method: "POST",
       json: { decision },
     }),
+
+  adminSetPosition: (id: number, position: Position) =>
+    request<{ id: number; position: Position }>(`/admin/users/${id}/position`, {
+      method: "POST",
+      json: { position },
+    }),
+
+  adminAbsences: (month?: string) =>
+    request<{ month: string; from: string; to: string; absences: ApiAbsence[] }>(
+      `/admin/absences${month ? `?month=${month}` : ""}`,
+    ),
 };

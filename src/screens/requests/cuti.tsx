@@ -11,6 +11,9 @@ import { ScreenHead } from "@/components/screen-head";
 import { SentScaffold } from "@/components/sent-scaffold";
 import { Ic, RIc, bigClock } from "@/components/icons";
 import { useApp, dateStr, fmtDateLong } from "@/app/store";
+import type { LeaveType } from "@/lib/api";
+
+type Place = "inCity" | "outside";
 
 const fmtD = (d: Date) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 const addDays = (d: Date, n: number) => {
@@ -19,22 +22,44 @@ const addDays = (d: Date, n: number) => {
   return x;
 };
 
-type LeaveType = "tahunan" | "sakit" | "darurat" | "duka";
-type Place = "inCity" | "outside";
-
+// Pasal 5 ayat (5)–(7) — one chip per permitted-absence reason.
 const LEAVE_OPTS: { v: LeaveType; label: string; icon: React.ReactNode }[] = [
   { v: "tahunan", label: "Tahunan", icon: RIc.calX },
   { v: "sakit", label: "Sakit", icon: RIc.heart },
-  { v: "darurat", label: "Darurat", icon: RIc.siren },
-  { v: "duka", label: "Duka", icon: RIc.dot },
+  { v: "izin", label: "Izin", icon: RIc.siren },
+  { v: "duka_inti", label: "Duka Inti", icon: RIc.dot },
+  { v: "duka_ortu", label: "Duka Ortu", icon: RIc.building },
+  { v: "menikah", label: "Menikah", icon: RIc.sun },
+  { v: "menikahkan_anak", label: "Nikah Anak", icon: Ic.user },
+  { v: "baptis_khitan", label: "Baptis / Khitan", icon: RIc.file },
+  { v: "istri_melahirkan", label: "Istri Lahiran", icon: RIc.bed },
+  { v: "melahirkan", label: "Melahirkan", icon: RIc.hourglass },
 ];
 
-const LABEL: Record<LeaveType, string> = {
+export const LABEL: Record<LeaveType, string> = {
   tahunan: "Cuti Tahunan",
   sakit: "Cuti Sakit",
-  darurat: "Cuti Darurat",
-  duka: "Cuti Duka",
+  izin: "Izin (dipotong cuti)",
+  duka_inti: "Duka — Anak/Pasangan",
+  duka_ortu: "Duka — Orangtua/Mertua",
+  menikah: "Menikah",
+  menikahkan_anak: "Menikahkan Anak",
+  baptis_khitan: "Baptis/Khitan Anak",
+  istri_melahirkan: "Istri Melahirkan",
+  melahirkan: "Cuti Melahirkan",
 };
+
+/** Fixed entitlements in working days (mirrors server/rules.ts). */
+const FIXED_DAYS: Partial<Record<LeaveType, number>> = {
+  izin: 1,
+  duka_inti: 2,
+  menikah: 2,
+  menikahkan_anak: 2,
+  baptis_khitan: 1,
+  istri_melahirkan: 1,
+};
+
+const MELAHIRKAN_DAYS = 90;
 
 // ── CUTI · 1 — form with dynamic rules per leave type ────────────
 export function CutiFormScreen() {
@@ -44,8 +69,12 @@ export function CutiFormScreen() {
   const [place, setPlace] = React.useState<Place>("inCity");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const bereMax = place === "inCity" ? 2 : 4;
   const start = new Date();
+
+  const days =
+    FIXED_DAYS[type] ??
+    (type === "duka_ortu" ? (place === "inCity" ? 2 : 4) : type === "melahirkan" ? MELAHIRKAN_DAYS : 1);
+  const cutsBalance = type === "tahunan" || type === "izin";
 
   async function submit() {
     if (type === "sakit") {
@@ -55,12 +84,11 @@ export function CutiFormScreen() {
     setBusy(true);
     setError(null);
     try {
-      const days = type === "duka" ? bereMax : 1;
       await submitCuti({
         type,
         startDate: dateStr(start),
         days,
-        ...(type === "duka" ? { place } : {}),
+        ...(type === "duka_ortu" ? { place } : {}),
       });
       navigate("/requests/cuti/sent", { state: { type, days } });
     } catch (err) {
@@ -71,8 +99,8 @@ export function CutiFormScreen() {
 
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
-      <ScreenHead title="Pengajuan Cuti" sub="Pilih jenis — aturan menyesuaikan otomatis." close to="/requests" />
-      <FieldLabel upper>Jenis Cuti</FieldLabel>
+      <ScreenHead title="Pengajuan Cuti & Izin" sub="Pilih alasan — aturan Pasal 5 menyesuaikan otomatis." close to="/requests" />
+      <FieldLabel upper>Jenis</FieldLabel>
       <div className="mb-4">
         <ChipRow options={LEAVE_OPTS} value={type} onChange={setType} />
       </div>
@@ -84,7 +112,7 @@ export function CutiFormScreen() {
         </div>
         <div className="flex-1">
           <FieldLabel upper>Selesai</FieldLabel>
-          <PseudoField icon={Ic.calendar}>{fmtD(addDays(start, type === "duka" ? bereMax - 1 : 1))}</PseudoField>
+          <PseudoField icon={Ic.calendar}>{fmtD(addDays(start, days - 1))}</PseudoField>
         </div>
       </div>
 
@@ -99,18 +127,22 @@ export function CutiFormScreen() {
           </Note>
         </div>
       )}
-      {type === "darurat" && (
+      {type === "izin" && (
         <div className="flex flex-col gap-3">
           <Note tone="warn" icon={RIc.siren}>
-            Matriks darurat: maks <b>1 hari/pengajuan</b>, <b>1×/bulan</b>, <b>3×/tahun</b>.
+            Ayat (7): maks <b>1 hari kerja</b>, <b>1×/bulan</b> pelayanan, <b>3×/tahun</b> pelayanan.
           </Note>
-          <div className="flex justify-between items-center bg-tint rounded-[13px] px-4 py-[14px]">
-            <span className="text-[13px] font-bold text-ink">Kuota tahun ini</span>
-            <span className="text-[16px] font-extrabold text-primary">2 / 3 dipakai</span>
-          </div>
+          <Note tone="danger" icon={Ic.alert}>
+            Izin <b>dipotong dari saldo cuti tahunan</b> (sisa {leaveBalance} → {Math.max(0, leaveBalance - 1)} hari).
+          </Note>
         </div>
       )}
-      {type === "duka" && (
+      {type === "duka_inti" && (
+        <Note tone="info" icon={RIc.dot}>
+          Anak atau suami/istri meninggal dunia — <b>2 hari kerja</b>, tanpa potongan saldo.
+        </Note>
+      )}
+      {type === "duka_ortu" && (
         <div className="flex flex-col gap-3">
           <div>
             <FieldLabel upper hint="memengaruhi maks hari">Lokasi duka</FieldLabel>
@@ -125,9 +157,19 @@ export function CutiFormScreen() {
           </div>
           <div className="flex justify-between items-center bg-tint rounded-[13px] px-4 py-[14px]">
             <span className="text-[13px] font-bold text-ink">Maksimum hari</span>
-            <span className="text-[18px] font-extrabold text-primary">{bereMax} hari</span>
+            <span className="text-[18px] font-extrabold text-primary">{days} hari</span>
           </div>
         </div>
+      )}
+      {(type === "menikah" || type === "menikahkan_anak" || type === "baptis_khitan" || type === "istri_melahirkan") && (
+        <Note tone="ok" icon={Ic.check}>
+          {LABEL[type]} — <b>{days} hari kerja</b> sesuai ketentuan, tanpa potongan saldo.
+        </Note>
+      )}
+      {type === "melahirkan" && (
+        <Note tone="info" icon={RIc.heart}>
+          Sesuai ketentuan cuti hamil/melahirkan — <b>{MELAHIRKAN_DAYS} hari</b>, tanpa potongan saldo.
+        </Note>
       )}
       {type === "sakit" && (
         <Note tone="info" icon={RIc.heart}>
@@ -144,6 +186,11 @@ export function CutiFormScreen() {
       <Button variant="primary" disabled={busy} onClick={submit}>
         {busy ? "Mengirim…" : type === "sakit" ? "Lanjutkan" : "Kirim Pengajuan"}
       </Button>
+      {cutsBalance && type === "izin" && (
+        <div className="text-center text-[11.5px] text-muted mt-2">
+          Di luar alasan ayat (5), izin diberikan atas pertimbangan Koordinator Personalia.
+        </div>
+      )}
     </div>
   );
 }
@@ -222,7 +269,7 @@ export function CutiSentScreen() {
   return (
     <SentScaffold
       icon={bigClock}
-      title="Pengajuan cuti terkirim"
+      title="Pengajuan terkirim"
       sub="Menunggu persetujuan Koordinator Personalia. Anda akan diberi tahu lewat notifikasi."
     >
       <SummaryCard>

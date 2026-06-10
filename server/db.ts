@@ -23,6 +23,7 @@ export interface UserRow {
   phone: string;
   password_hash: string;
   role: "employee" | "admin";
+  position: "tata_usaha" | "sopir" | "koster";
   status: "pending" | "approved" | "rejected";
   leave_balance: number;
   created_at: Date;
@@ -32,9 +33,13 @@ export interface AttendanceRow {
   id: number;
   user_id: number;
   date: string;
+  shift: number;
   check_in: Date;
   check_out: Date | null;
   late: boolean;
+  early_out: boolean;
+  special: boolean;
+  worked_minutes: number | null;
   distance_m: number | null;
 }
 

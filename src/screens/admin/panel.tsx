@@ -4,9 +4,15 @@ import { Note } from "@/components/ui/note";
 import { Sk } from "@/components/ui/skeleton";
 import { ScreenHead } from "@/components/screen-head";
 import { Ic, RIc } from "@/components/icons";
-import { api, type AdminRequest, type ApiUser } from "@/lib/api";
+import { api, type AdminRequest, type ApiAbsence, type ApiUser, type Position } from "@/lib/api";
 
-type Tab = "users" | "requests";
+type Tab = "users" | "requests" | "absences";
+
+const POSITIONS: { v: Position; label: string }[] = [
+  { v: "tata_usaha", label: "Tata Usaha" },
+  { v: "sopir", label: "Sopir" },
+  { v: "koster", label: "Koster" },
+];
 
 const KIND_ICON = { cuti: RIc.calX, dinas: RIc.plane, lembur: RIc.hourglass } as const;
 
@@ -88,15 +94,21 @@ export function AdminPanelScreen() {
   const [tab, setTab] = React.useState<Tab>("users");
   const [users, setUsers] = React.useState<ApiUser[] | null>(null);
   const [requests, setRequests] = React.useState<AdminRequest[] | null>(null);
+  const [absences, setAbsences] = React.useState<ApiAbsence[] | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setError(null);
     try {
-      const [u, r] = await Promise.all([api.adminUsers(), api.adminRequests()]);
+      const [u, r, a] = await Promise.all([
+        api.adminUsers(),
+        api.adminRequests(),
+        api.adminAbsences(),
+      ]);
       setUsers(u);
       setRequests(r);
+      setAbsences(a.absences);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
     }
@@ -140,8 +152,9 @@ export function AdminPanelScreen() {
           value={tab}
           onChange={setTab}
           options={[
-            { v: "users", label: `Pendaftar (${pendingUsers.length})`, icon: Ic.user },
-            { v: "requests", label: `Pengajuan (${pendingReqs.length})`, icon: RIc.file },
+            { v: "users", label: `Pendaftar (${pendingUsers.length})` },
+            { v: "requests", label: `Pengajuan (${pendingReqs.length})` },
+            { v: "absences", label: `Absen (${absences?.length ?? 0})` },
           ]}
         />
       </div>
@@ -190,11 +203,56 @@ export function AdminPanelScreen() {
                       <div className="text-[13px] font-bold text-ink truncate">{u.name}</div>
                       <div className="text-[11.5px] text-muted truncate">{u.email}</div>
                     </div>
-                    <StatusChip status={u.status} />
+                    {u.status === "approved" ? (
+                      <select
+                        value={u.position}
+                        disabled={busyId === `p${u.id}`}
+                        onChange={(e) =>
+                          decide(() => api.adminSetPosition(u.id, e.target.value as Position), `p${u.id}`)
+                        }
+                        aria-label={`Posisi ${u.name}`}
+                        className="text-[11px] font-bold text-primary bg-tint border border-line rounded-[9px] px-2 py-[6px] cursor-pointer outline-none"
+                      >
+                        {POSITIONS.map((p) => (
+                          <option key={p.v} value={p.v}>{p.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <StatusChip status={u.status} />
+                    )}
                   </div>
                 ))}
+                <div className="text-[11px] text-muted px-1">
+                  Posisi menentukan jadwal kerja Pasal 5 (jam masuk, hari libur, sesi Minggu).
+                </div>
               </>
             )}
+          </div>
+        )
+      ) : tab === "absences" ? (
+        absences === null ? (
+          <ListSkeleton />
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Note tone="warn" icon={Ic.alert}>
+              Hari kerja terjadwal <b>tanpa presensi dan tanpa cuti/dinas disetujui</b> bulan ini —
+              memengaruhi tunjangan kehadiran (Pasal 5 ayat 8).
+            </Note>
+            {absences.length === 0 && <EmptyNote>Tidak ada absen tanpa keterangan bulan ini.</EmptyNote>}
+            {absences.map((a, i) => (
+              <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] px-[13px] py-[11px]">
+                <span className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+                  {Ic.alert}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-bold text-ink truncate">{a.userName}</div>
+                  <div className="text-[11.5px] text-muted truncate">{a.date} · {a.position}</div>
+                </div>
+                <span className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+                  Tanpa Ket.
+                </span>
+              </div>
+            ))}
           </div>
         )
       ) : requests === null ? (

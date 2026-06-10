@@ -111,6 +111,8 @@ export interface LogEntry {
   in: string;
   out: string;
   late?: boolean;
+  earlyOut?: boolean;
+  special?: boolean;
 }
 
 export type RequestRecord = ApiRequest;
@@ -119,7 +121,13 @@ interface AppState {
   /** False until the session bootstrap (token → /auth/me) finishes. */
   ready: boolean;
   authed: boolean;
-  user: { name: string; initials: string; email: string; role: "employee" | "admin" };
+  user: {
+    name: string;
+    initials: string;
+    email: string;
+    role: "employee" | "admin";
+    position: "tata_usaha" | "sopir" | "koster";
+  };
   leaveBalance: number;
 
   attendance: "none" | "in" | "done";
@@ -162,12 +170,22 @@ function logLabel(date: string) {
   return fmtDateShort(new Date(date + "T00:00:00"));
 }
 
-function toLogEntry(e: { date: string; checkIn: string; checkOut: string | null; late: boolean }): LogEntry {
+function toLogEntry(e: {
+  date: string;
+  shift: number;
+  checkIn: string;
+  checkOut: string | null;
+  late: boolean;
+  earlyOut: boolean;
+  special: boolean;
+}): LogEntry {
   return {
-    d: logLabel(e.date),
+    d: logLabel(e.date) + (e.shift > 0 ? ` · Sesi ${e.shift + 1}` : ""),
     in: fmtTime(new Date(e.checkIn)),
     out: e.checkOut ? fmtTime(new Date(e.checkOut)) : "—",
     late: e.late,
+    earlyOut: e.earlyOut,
+    special: e.special,
   };
 }
 
@@ -178,6 +196,7 @@ const GUEST: ApiUser = {
   email: "",
   phone: "",
   role: "employee",
+  position: "tata_usaha",
   status: "approved",
   leaveBalance: 0,
 };
@@ -188,6 +207,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = React.useState(false);
   const [apiUser, setApiUser] = React.useState<ApiUser>(GUEST);
   const [today, setToday] = React.useState<ApiToday | null>(null);
+  const [todayDone, setTodayDone] = React.useState(false);
   const [log, setLog] = React.useState<LogEntry[]>([]);
   const [requests, setRequests] = React.useState<RequestRecord[]>([]);
   const [lastDistanceM, setLastDistanceM] = React.useState(18);
@@ -201,6 +221,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ]);
     setApiUser(me.user);
     setToday(me.today);
+    setTodayDone(me.todayDone);
     setLog(logRows.map(toLogEntry));
     setRequests(reqRows);
     setAuthed(true);
@@ -225,10 +246,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       initials: initials(apiUser.name),
       email: apiUser.email,
       role: apiUser.role,
+      position: apiUser.position,
     },
     leaveBalance: apiUser.leaveBalance,
 
-    attendance: today ? (today.checkOut ? "done" : "in") : "none",
+    // "in" while a session is open; "done" when every scheduled session is
+    // recorded (Sunday Tata Usaha has two); otherwise check-in is available.
+    attendance: today && !today.checkOut ? "in" : todayDone ? "done" : "none",
     checkInAt: today ? new Date(today.checkIn) : null,
     checkOutAt: today?.checkOut ? new Date(today.checkOut) : null,
     lastDistanceM,
@@ -250,20 +274,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setAuthed(false);
       setApiUser(GUEST);
       setToday(null);
+      setTodayDone(false);
       setLog([]);
       setRequests([]);
     },
     checkIn: async () => {
       const res = await api.checkIn(pendingLoc.current);
-      setToday({ checkIn: res.checkIn, checkOut: null, late: res.late, distanceM: res.distanceM });
+      setToday({
+        checkIn: res.checkIn,
+        checkOut: null,
+        shift: res.shift,
+        late: res.late,
+        special: res.special,
+        distanceM: res.distanceM,
+      });
+      setTodayDone(false);
       setLastDistanceM(res.distanceM);
       setLog((await api.attendanceLog()).map(toLogEntry));
     },
     checkOut: async () => {
       const res = await api.checkOut(pendingLoc.current);
+      // Keep the closed session locally for the success screen; /me says
+      // whether more shifts remain today (Sunday split shift).
       setToday((t) => (t ? { ...t, checkOut: res.checkOut } : t));
       setLastDistanceM(res.distanceM);
-      setLog((await api.attendanceLog()).map(toLogEntry));
+      const [me, logRows] = await Promise.all([api.me(), api.attendanceLog()]);
+      setTodayDone(me.todayDone);
+      setLog(logRows.map(toLogEntry));
     },
     refresh: loadSession,
     submitCuti: async (data) => {
