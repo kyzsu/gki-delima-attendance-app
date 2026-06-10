@@ -1,8 +1,8 @@
 import { Router } from "express";
 import type { Response } from "express";
 import { z } from "zod";
-import { sql, type AttendanceRow } from "../db.ts";
-import { requireAuth } from "../middleware.ts";
+import { sql, type AttendanceRow } from "../db";
+import { requireAuth } from "../middleware";
 import {
   CHURCH,
   DEMO_MODE,
@@ -11,7 +11,7 @@ import {
   dateStr,
   haversineM,
   hourOfDay,
-} from "../rules.ts";
+} from "../rules";
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireAuth);

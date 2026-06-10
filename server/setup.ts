@@ -7,9 +7,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { sql } from "./db.ts";
-import { hashPassword } from "./auth.ts";
-import { addDaysStr, dateStr } from "./rules.ts";
+import { sql } from "./db";
+import { hashPassword } from "./auth";
+import { addDaysStr, dateStr } from "./rules";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const demo = process.argv.includes("--demo");

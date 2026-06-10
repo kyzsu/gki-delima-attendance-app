@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { hashPassword, signToken, verifyPassword } from "../auth.ts";
-import { sql, type AttendanceRow, type UserRow } from "../db.ts";
-import { requireAuth, publicUser } from "../middleware.ts";
-import { AUTO_APPROVE_MS, DEMO_MODE, dateStr } from "../rules.ts";
+import { hashPassword, signToken, verifyPassword } from "../auth";
+import { sql, type AttendanceRow, type UserRow } from "../db";
+import { requireAuth, publicUser } from "../middleware";
+import { AUTO_APPROVE_MS, DEMO_MODE, dateStr } from "../rules";
 
 export const authRouter = Router();
 

@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { verifyToken } from "./auth.ts";
-import { sql, type UserRow } from "./db.ts";
+import { verifyToken } from "./auth";
+import { sql, type UserRow } from "./db";
 
 declare global {
   namespace Express {

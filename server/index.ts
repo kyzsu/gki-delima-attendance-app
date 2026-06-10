@@ -1,6 +1,6 @@
 // Local development entrypoint — Vercel uses api/index.ts instead.
-import { app } from "./app.ts";
-import { DEMO_MODE } from "./rules.ts";
+import { app } from "./app";
+import { DEMO_MODE } from "./rules";
 
 const PORT = Number(process.env.PORT) || 3001;
 app.listen(PORT, () => {

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { sql, type RequestRow, type UserRow } from "../db.ts";
-import { requireAuth } from "../middleware.ts";
+import { sql, type RequestRow, type UserRow } from "../db";
+import { requireAuth } from "../middleware";
 import {
   DARURAT_MAX_DAYS,
   DARURAT_MAX_PER_MONTH,
@@ -23,7 +23,7 @@ import {
   weekdayLong,
   weekEnd,
   weekStart,
-} from "../rules.ts";
+} from "../rules";
 
 export const requestsRouter = Router();
 requestsRouter.use(requireAuth);
