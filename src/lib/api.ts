@@ -79,6 +79,10 @@ export interface ApiConfig {
   demoMode: boolean;
 }
 
+export interface AdminRequest extends ApiRequest {
+  userName: string;
+}
+
 export interface Coords {
   lat?: number;
   lng?: number;
@@ -143,4 +147,23 @@ export const api = {
       "/requests/lembur",
       { method: "POST", json: data },
     ),
+
+  // ── Admin ──────────────────────────────────────────────────────
+  adminUsers: (status?: "pending" | "approved" | "rejected") =>
+    request<ApiUser[]>(`/admin/users${status ? `?status=${status}` : ""}`),
+
+  adminDecideUser: (id: number, decision: "approved" | "rejected") =>
+    request<{ id: number; status: string }>(`/admin/users/${id}/decision`, {
+      method: "POST",
+      json: { decision },
+    }),
+
+  adminRequests: (status?: "Menunggu" | "Disetujui" | "Ditolak") =>
+    request<AdminRequest[]>(`/admin/requests${status ? `?status=${status}` : ""}`),
+
+  adminDecideRequest: (id: number, decision: "Disetujui" | "Ditolak") =>
+    request<{ id: number; status: string }>(`/admin/requests/${id}/decision`, {
+      method: "POST",
+      json: { decision },
+    }),
 };

@@ -29,6 +29,12 @@ export function ProfileScreen() {
       </SummaryCard>
 
       <div className="flex-1 min-h-4" />
+      {user.role === "admin" && (
+        <Button variant="primary" className="mb-[10px]" onClick={() => navigate("/admin")}>
+          {Ic.shield}
+          Panel Admin
+        </Button>
+      )}
       <Button
         variant="outline"
         onClick={() => {

@@ -119,7 +119,7 @@ interface AppState {
   /** False until the session bootstrap (token → /auth/me) finishes. */
   ready: boolean;
   authed: boolean;
-  user: { name: string; initials: string; email: string };
+  user: { name: string; initials: string; email: string; role: "employee" | "admin" };
   leaveBalance: number;
 
   attendance: "none" | "in" | "done";
@@ -132,7 +132,7 @@ interface AppState {
   log: LogEntry[];
   requests: RequestRecord[];
 
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<ApiUser>;
   logout: () => void;
   checkIn: () => Promise<void>;
   checkOut: () => Promise<void>;
@@ -220,7 +220,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppState = {
     ready,
     authed,
-    user: { name: apiUser.name, initials: initials(apiUser.name), email: apiUser.email },
+    user: {
+      name: apiUser.name,
+      initials: initials(apiUser.name),
+      email: apiUser.email,
+      role: apiUser.role,
+    },
     leaveBalance: apiUser.leaveBalance,
 
     attendance: today ? (today.checkOut ? "done" : "in") : "none",
@@ -238,6 +243,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const res = await api.login(email, password);
       setToken(res.token);
       await loadSession();
+      return res.user;
     },
     logout: () => {
       clearToken();
