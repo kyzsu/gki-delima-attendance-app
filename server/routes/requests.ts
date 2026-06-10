@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db, type RequestRow, type UserRow } from "../db.ts";
+import { sql, type RequestRow, type UserRow } from "../db.ts";
 import { requireAuth } from "../middleware.ts";
 import {
   DARURAT_MAX_DAYS,
@@ -15,11 +15,12 @@ import {
   LEMBUR_STEP_H,
   LEMBUR_TARIFF,
   LEMBUR_WEEKLY_CAP_H,
-  dateStr,
+  addDaysStr,
   dinasAllowance,
   fmtHours,
   fmtIDR,
   isJabodetabek,
+  weekdayLong,
   weekEnd,
   weekStart,
 } from "../rules.ts";
@@ -40,10 +41,10 @@ function publicRequest(r: RequestRow) {
   };
 }
 
-requestsRouter.get("/", (req, res) => {
-  const rows = db
-    .prepare("SELECT * FROM requests WHERE user_id = ? ORDER BY id DESC")
-    .all(req.user!.id) as unknown as RequestRow[];
+requestsRouter.get("/", async (req, res) => {
+  const rows = await sql<RequestRow[]>`
+    SELECT * FROM requests WHERE user_id = ${req.user!.id} ORDER BY id DESC
+  `;
   res.json(rows.map(publicRequest));
 });
 
@@ -56,7 +57,7 @@ const cutiSchema = z.object({
   doctorNote: z.boolean().optional(), // sakit only
 });
 
-requestsRouter.post("/cuti", (req, res) => {
+requestsRouter.post("/cuti", async (req, res) => {
   const body = cutiSchema.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Data cuti tidak valid.", issues: body.error.issues });
@@ -66,17 +67,12 @@ requestsRouter.post("/cuti", (req, res) => {
   const { type, startDate, place, doctorNote } = body.data;
   let days = body.data.days ?? 1;
 
-  if (type === "tahunan" && days > user.leave_balance) {
+  // Tahunan — and sakit without a doctor's note — deduct the annual balance.
+  const cutsBalance = type === "tahunan" || (type === "sakit" && !doctorNote);
+  if (cutsBalance && days > user.leave_balance) {
     res.status(422).json({
       error: `Saldo cuti tahunan tidak cukup (sisa ${user.leave_balance} hari).`,
       leaveBalance: user.leave_balance,
-    });
-    return;
-  }
-  if (type === "sakit" && !doctorNote) {
-    res.status(422).json({
-      error: "Lampirkan surat dokter agar saldo tahunan tidak terpotong.",
-      reason: "doctor-note-required",
     });
     return;
   }
@@ -85,21 +81,19 @@ requestsRouter.post("/cuti", (req, res) => {
       res.status(422).json({ error: `Cuti darurat maks ${DARURAT_MAX_DAYS} hari/pengajuan.` });
       return;
     }
-    const month = startDate.slice(0, 7);
-    const year = startDate.slice(0, 4);
-    const count = (range: string) =>
-      (db
-        .prepare(
-          `SELECT COUNT(*) AS n FROM requests
-           WHERE user_id = ? AND leave_type = 'darurat' AND status != 'Ditolak'
-             AND start_date LIKE ?`,
-        )
-        .get(req.user!.id, range + "%") as { n: number }).n;
-    if (count(month) >= DARURAT_MAX_PER_MONTH) {
+    const count = async (prefix: string) => {
+      const [row] = await sql<{ n: number }[]>`
+        SELECT COUNT(*)::int AS n FROM requests
+        WHERE user_id = ${user.id} AND leave_type = 'darurat' AND status != 'Ditolak'
+          AND start_date LIKE ${prefix + "%"}
+      `;
+      return row!.n;
+    };
+    if ((await count(startDate.slice(0, 7))) >= DARURAT_MAX_PER_MONTH) {
       res.status(422).json({ error: `Cuti darurat maks ${DARURAT_MAX_PER_MONTH}×/bulan.` });
       return;
     }
-    const usedThisYear = count(year);
+    const usedThisYear = await count(startDate.slice(0, 4));
     if (usedThisYear >= DARURAT_MAX_PER_YEAR) {
       res.status(422).json({
         error: `Kuota cuti darurat tahun ini habis (${usedThisYear}/${DARURAT_MAX_PER_YEAR}).`,
@@ -124,34 +118,25 @@ requestsRouter.post("/cuti", (req, res) => {
     }
   }
 
-  const end = new Date(startDate + "T00:00:00");
-  end.setDate(end.getDate() + days - 1);
-  const endDate = dateStr(end);
-
-  const result = db
-    .prepare(
-      `INSERT INTO requests (user_id, kind, title, detail, leave_type, place, doctor_note, start_date, end_date, days)
-       VALUES (?, 'cuti', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      user.id,
-      LEAVE_LABEL[type],
-      `${days} hari · mulai ${startDate}`,
-      type,
-      place ?? null,
-      doctorNote ? 1 : null,
-      startDate,
-      endDate,
-      days,
-    );
+  const endDate = addDaysStr(startDate, days - 1);
+  const detail =
+    type === "sakit"
+      ? `${days} hari · ${doctorNote ? "surat dokter" : "tanpa surat"}`
+      : `${days} hari · mulai ${startDate}`;
+  const [created] = await sql<{ id: number }[]>`
+    INSERT INTO requests (user_id, kind, title, detail, leave_type, place, doctor_note, start_date, end_date, days)
+    VALUES (${user.id}, 'cuti', ${LEAVE_LABEL[type]}, ${detail}, ${type}, ${place ?? null},
+            ${doctorNote ?? null}, ${startDate}, ${endDate}, ${days})
+    RETURNING id
+  `;
   res.status(201).json({
-    id: Number(result.lastInsertRowid),
+    id: created!.id,
     type,
     days,
     startDate,
     endDate,
     status: "Menunggu",
-    ...(type === "tahunan" ? { balanceAfterApproval: user.leave_balance - days } : {}),
+    ...(cutsBalance ? { balanceAfterApproval: user.leave_balance - days } : {}),
   });
 });
 
@@ -163,7 +148,7 @@ const dinasSchema = z.object({
   nights: z.number().int().min(1).max(DINAS_MAX_NIGHTS).optional(),
 });
 
-requestsRouter.post("/dinas", (req, res) => {
+requestsRouter.post("/dinas", async (req, res) => {
   const body = dinasSchema.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Data dinas tidak valid.", issues: body.error.issues });
@@ -181,34 +166,21 @@ requestsRouter.post("/dinas", (req, res) => {
   const allowance = jabodetabek
     ? { transport: 0, meals: 0, lodging: 0, total: 0 }
     : dinasAllowance(overnight, nights);
-
-  const ret = new Date(departDate + "T00:00:00");
-  ret.setDate(ret.getDate() + nights);
-  const returnDate = dateStr(ret);
+  const returnDate = addDaysStr(departDate, nights);
 
   const detail = jabodetabek
     ? "1 hari · dalam Jabodetabek"
     : overnight
       ? `${nights} mlm · ${fmtIDR(allowance.total)}`
       : `1 hari · ${fmtIDR(allowance.total)}`;
-  const result = db
-    .prepare(
-      `INSERT INTO requests (user_id, kind, title, detail, start_date, end_date, dest, overnight, nights, amount)
-       VALUES (?, 'dinas', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      req.user!.id,
-      `Dinas — ${dest}`,
-      detail,
-      departDate,
-      returnDate,
-      dest,
-      overnight ? 1 : 0,
-      nights,
-      allowance.total,
-    );
+  const [created] = await sql<{ id: number }[]>`
+    INSERT INTO requests (user_id, kind, title, detail, start_date, end_date, dest, overnight, nights, amount)
+    VALUES (${req.user!.id}, 'dinas', ${`Dinas — ${dest}`}, ${detail}, ${departDate},
+            ${returnDate}, ${dest}, ${overnight}, ${nights}, ${allowance.total})
+    RETURNING id
+  `;
   res.status(201).json({
-    id: Number(result.lastInsertRowid),
+    id: created!.id,
     dest,
     jabodetabek,
     departDate,
@@ -229,7 +201,7 @@ const lemburSchema = z.object({
     .refine((h) => Number.isInteger(h / LEMBUR_STEP_H), `Kelipatan ${LEMBUR_STEP_H} jam`),
 });
 
-requestsRouter.post("/lembur", (req, res) => {
+requestsRouter.post("/lembur", async (req, res) => {
   const body = lemburSchema.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Data lembur tidak valid.", issues: body.error.issues });
@@ -244,61 +216,59 @@ requestsRouter.post("/lembur", (req, res) => {
     });
     return;
   }
-  const existingDay = db
-    .prepare(
-      `SELECT COALESCE(SUM(hours), 0) AS h FROM requests
-       WHERE user_id = ? AND kind = 'lembur' AND status != 'Ditolak' AND start_date = ?`,
-    )
-    .get(req.user!.id, date) as { h: number };
-  if (existingDay.h + hours > LEMBUR_DAILY_CAP_H) {
+  const [existingDay] = await sql<{ h: number }[]>`
+    SELECT COALESCE(SUM(hours), 0)::float8 AS h FROM requests
+    WHERE user_id = ${req.user!.id} AND kind = 'lembur' AND status != 'Ditolak'
+      AND start_date = ${date}
+  `;
+  if (existingDay!.h + hours > LEMBUR_DAILY_CAP_H) {
     res.status(422).json({
-      error: `Total lembur tanggal itu melebihi cap harian ${LEMBUR_DAILY_CAP_H} jam (sudah ${fmtHours(existingDay.h)} jam).`,
-      usedHours: existingDay.h,
+      error: `Total lembur tanggal itu melebihi cap harian ${LEMBUR_DAILY_CAP_H} jam (sudah ${fmtHours(existingDay!.h)} jam).`,
+      usedHours: existingDay!.h,
     });
     return;
   }
-  const week = db
-    .prepare(
-      `SELECT COALESCE(SUM(hours), 0) AS h FROM requests
-       WHERE user_id = ? AND kind = 'lembur' AND status != 'Ditolak'
-         AND start_date BETWEEN ? AND ?`,
-    )
-    .get(req.user!.id, weekStart(date), weekEnd(date)) as { h: number };
-  if (week.h + hours > LEMBUR_WEEKLY_CAP_H) {
+  const [week] = await sql<{ h: number }[]>`
+    SELECT COALESCE(SUM(hours), 0)::float8 AS h FROM requests
+    WHERE user_id = ${req.user!.id} AND kind = 'lembur' AND status != 'Ditolak'
+      AND start_date BETWEEN ${weekStart(date)} AND ${weekEnd(date)}
+  `;
+  if (week!.h + hours > LEMBUR_WEEKLY_CAP_H) {
     res.status(422).json({
-      error: `Melebihi kuota mingguan ${LEMBUR_WEEKLY_CAP_H} jam (terpakai ${fmtHours(week.h)} jam).`,
-      weeklyUsedHours: week.h,
+      error: `Melebihi kuota mingguan ${LEMBUR_WEEKLY_CAP_H} jam (terpakai ${fmtHours(week!.h)} jam).`,
+      weeklyUsedHours: week!.h,
       weeklyCapHours: LEMBUR_WEEKLY_CAP_H,
     });
     return;
   }
 
-  const weekday = new Date(date + "T00:00:00").toLocaleDateString("id-ID", { weekday: "long" });
-  const result = db
-    .prepare(
-      `INSERT INTO requests (user_id, kind, title, detail, start_date, hours)
-       VALUES (?, 'lembur', ?, ?, ?, ?)`,
-    )
-    .run(req.user!.id, `Lembur — ${weekday}`, `${fmtHours(hours)} jam`, date, hours);
+  const [created] = await sql<{ id: number }[]>`
+    INSERT INTO requests (user_id, kind, title, detail, start_date, hours)
+    VALUES (${req.user!.id}, 'lembur', ${`Lembur — ${weekdayLong(date)}`},
+            ${`${fmtHours(hours)} jam`}, ${date}, ${hours})
+    RETURNING id
+  `;
   res.status(201).json({
-    id: Number(result.lastInsertRowid),
+    id: created!.id,
     date,
     hours,
     tariff: LEMBUR_TARIFF,
-    weeklyRemainingHours: +(LEMBUR_WEEKLY_CAP_H - week.h - hours).toFixed(1),
+    weeklyRemainingHours: +(LEMBUR_WEEKLY_CAP_H - week!.h - hours).toFixed(1),
     status: "Menunggu",
   });
 });
 
 // Approving an annual-leave request deducts the balance — exported for the
 // admin router.
-export function approveRequest(r: RequestRow) {
-  db.prepare("UPDATE requests SET status = 'Disetujui' WHERE id = ?").run(r.id);
-  if (r.kind === "cuti" && r.leave_type === "tahunan" && r.days) {
-    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(r.user_id) as unknown as UserRow;
-    db.prepare("UPDATE users SET leave_balance = MAX(0, ?) WHERE id = ?").run(
-      user.leave_balance - r.days,
-      r.user_id,
-    );
+export async function approveRequest(r: RequestRow) {
+  await sql`UPDATE requests SET status = 'Disetujui' WHERE id = ${r.id}`;
+  const cutsBalance =
+    r.leave_type === "tahunan" || (r.leave_type === "sakit" && !r.doctor_note);
+  if (r.kind === "cuti" && cutsBalance && r.days) {
+    const [user] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${r.user_id}`;
+    await sql`
+      UPDATE users SET leave_balance = GREATEST(0, ${user!.leave_balance - r.days})
+      WHERE id = ${r.user_id}
+    `;
   }
 }

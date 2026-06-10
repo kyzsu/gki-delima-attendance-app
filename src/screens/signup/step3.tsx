@@ -3,15 +3,35 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { StepHead } from "@/components/screen-head";
 import { Ic } from "@/components/icons";
-import { useApp } from "@/app/store";
+import { api } from "@/lib/api";
 import { useSignup } from "./signup-context";
 
 export function Step3Screen() {
   const navigate = useNavigate();
   const { draft, patch } = useSignup();
-  const { setUserName } = useApp();
   const [photo, setPhoto] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.signup({
+        name: draft.name.trim(),
+        nip: draft.nip.trim(),
+        email: draft.email.trim(),
+        phone: draft.phone.trim(),
+        password: draft.password,
+        agreed: true,
+      });
+      navigate("/signup/approval", { state: { signupId: res.id, name: draft.name.trim() } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+      setBusy(false);
+    }
+  }
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -81,15 +101,16 @@ export function Step3Screen() {
         </span>
       </label>
 
-      <Button
-        variant="primary"
-        disabled={!draft.agreed}
-        onClick={() => {
-          if (draft.name.trim()) setUserName(draft.name.trim());
-          navigate("/signup/approval");
-        }}
-      >
-        Kirim Pendaftaran
+      {error && (
+        <div
+          className="mb-3 rounded-[13px] px-4 py-3 text-[13px] font-semibold"
+          style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
+        >
+          {error}
+        </div>
+      )}
+      <Button variant="primary" disabled={!draft.agreed || busy} onClick={submit}>
+        {busy ? "Mengirim…" : "Kirim Pendaftaran"}
       </Button>
     </div>
   );

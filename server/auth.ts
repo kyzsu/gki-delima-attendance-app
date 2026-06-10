@@ -2,7 +2,14 @@
 // no external auth dependencies.
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
-const SECRET = process.env.JWT_SECRET ?? "gki-delima-dev-secret-change-me";
+const SECRET =
+  process.env.JWT_SECRET ??
+  (() => {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("JWT_SECRET must be set in production.");
+    }
+    return "gki-delima-dev-secret";
+  })();
 const TOKEN_TTL_S = 7 * 24 * 60 * 60; // 7 days
 
 // ── Passwords ────────────────────────────────────────────────────

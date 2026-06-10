@@ -11,7 +11,7 @@ import { checkLocation, useApp } from "@/app/store";
 export function LocatingScreen({ mode }: { mode: "in" | "out" }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { setLastDistanceM } = useApp();
+  const { setLastDistanceM, setPendingLoc } = useApp();
   const base = mode === "in" ? "/checkin" : "/checkout";
 
   React.useEffect(() => {
@@ -26,6 +26,8 @@ export function LocatingScreen({ mode }: { mode: "in" | "out" }) {
           setLastDistanceM(res.distanceM);
           navigate(`${base}/out-of-range`, { replace: true });
         } else {
+          // Hand the verified coordinates to the check-in/out API call.
+          setPendingLoc({ lat: res.lat, lng: res.lng });
           setLastDistanceM(res.distanceM);
           navigate(`${base}/ready`, { replace: true });
         }
@@ -34,7 +36,7 @@ export function LocatingScreen({ mode }: { mode: "in" | "out" }) {
     return () => {
       alive = false;
     };
-  }, [base, navigate, params, setLastDistanceM]);
+  }, [base, navigate, params, setLastDistanceM, setPendingLoc]);
 
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">

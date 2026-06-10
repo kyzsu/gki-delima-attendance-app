@@ -1,11 +1,11 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useApp } from "@/app/store";
 
 export function SuccessScreen() {
   const navigate = useNavigate();
-  const { user } = useApp();
-  const firstName = user.name.split(" ")[0];
+  const location = useLocation();
+  const { name } = (location.state ?? {}) as { name?: string };
+  const firstName = (name ?? "Karyawan").split(" ")[0];
   return (
     <div
       className="flex flex-col flex-1 relative overflow-hidden items-center text-center px-7 pb-11"
@@ -27,7 +27,7 @@ export function SuccessScreen() {
       </div>
 
       <div className="relative flex flex-col gap-3 w-full">
-        <Button variant="light" onClick={() => navigate("/home")}>Mulai Presensi</Button>
+        <Button variant="light" onClick={() => navigate("/login")}>Masuk &amp; Mulai Presensi</Button>
       </div>
     </div>
   );

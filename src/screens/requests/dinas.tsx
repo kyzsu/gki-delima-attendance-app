@@ -8,8 +8,16 @@ import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { ScreenHead } from "@/components/screen-head";
 import { SentScaffold } from "@/components/sent-scaffold";
 import { Ic, RIc, bigCheck } from "@/components/icons";
-import { useApp } from "@/app/store";
+import { Note } from "@/components/ui/note";
+import { useApp, dateStr } from "@/app/store";
 import { fmtIDR } from "@/lib/utils";
+
+const fmtD = (d: Date) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+const addDays = (d: Date, n: number) => {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+};
 
 const DEST = [
   { v: "Jakarta", jabo: true },
@@ -26,9 +34,28 @@ const DEST = [
 // ── DINAS · 1 — destination triggers the Jabodetabek perimeter ───
 export function DinasFormScreen() {
   const navigate = useNavigate();
-  const { addRequest } = useApp();
+  const { submitDinas } = useApp();
   const [dest, setDest] = React.useState("Jakarta");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const inside = DEST.find((d) => d.v === dest)!.jabo;
+  const depart = new Date();
+
+  async function submit() {
+    if (!inside) {
+      navigate("/requests/dinas/allowance", { state: { dest } });
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await submitDinas({ dest, departDate: dateStr(depart) });
+      navigate("/requests/dinas/sent", { state: { dest, total: 0, nights: 0 } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
@@ -52,11 +79,11 @@ export function DinasFormScreen() {
       <div className="flex gap-[10px] mb-[14px]">
         <div className="flex-1">
           <FieldLabel upper>Berangkat</FieldLabel>
-          <PseudoField icon={Ic.calendar}>10 Jun</PseudoField>
+          <PseudoField icon={Ic.calendar}>{fmtD(depart)}</PseudoField>
         </div>
         <div className="flex-1">
           <FieldLabel upper>Kembali</FieldLabel>
-          <PseudoField icon={Ic.calendar}>{inside ? "10 Jun" : "12 Jun"}</PseudoField>
+          <PseudoField icon={Ic.calendar}>{fmtD(inside ? depart : addDays(depart, 2))}</PseudoField>
         </div>
       </div>
 
@@ -79,18 +106,13 @@ export function DinasFormScreen() {
       </div>
 
       <div className="flex-1 min-h-4" />
-      <Button
-        variant="primary"
-        onClick={() => {
-          if (inside) {
-            addRequest({ kind: "dinas", title: `Dinas — ${dest}`, detail: "1 hari · dalam Jabodetabek", status: "Menunggu" });
-            navigate("/requests/dinas/sent", { state: { dest, total: 0, nights: 0 } });
-          } else {
-            navigate("/requests/dinas/allowance", { state: { dest } });
-          }
-        }}
-      >
-        {inside ? "Kirim Pengajuan" : "Lanjut ke Tunjangan"}
+      {error && (
+        <div className="mb-3">
+          <Note tone="danger" icon={Ic.alert}>{error}</Note>
+        </div>
+      )}
+      <Button variant="primary" disabled={busy} onClick={submit}>
+        {busy ? "Mengirim…" : inside ? "Kirim Pengajuan" : "Lanjut ke Tunjangan"}
       </Button>
     </div>
   );
@@ -115,16 +137,38 @@ const RATES = { meal: 75000, transport: 150000, lodging: 350000 };
 export function DinasAllowanceScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { addRequest } = useApp();
+  const { submitDinas } = useApp();
   const dest: string = location.state?.dest ?? "Bandung";
 
   const [overnight, setOvernight] = React.useState<"none" | "over">("over");
   const [nights, setNights] = React.useState(2);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const isOver = overnight === "over";
+  // Preview only — the server recomputes the allowance on submit.
   const transport = RATES.transport * (isOver ? 2 : 1);
   const meals = isOver ? RATES.meal * (nights + 1) : RATES.meal;
   const lodging = isOver ? RATES.lodging * nights : 0;
   const total = transport + meals + lodging;
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await submitDinas({
+        dest,
+        departDate: dateStr(new Date()),
+        overnight: isOver,
+        ...(isOver ? { nights } : {}),
+      });
+      navigate("/requests/dinas/sent", {
+        state: { dest, total: res.allowance.total, nights: res.nights },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
@@ -166,19 +210,13 @@ export function DinasAllowanceScreen() {
       </div>
 
       <div className="flex-1 min-h-4" />
-      <Button
-        variant="primary"
-        onClick={() => {
-          addRequest({
-            kind: "dinas",
-            title: `Dinas — ${dest}`,
-            detail: isOver ? `${nights} mlm · ${fmtIDR(total)}` : `1 hari · ${fmtIDR(total)}`,
-            status: "Menunggu",
-          });
-          navigate("/requests/dinas/sent", { state: { dest, total, nights: isOver ? nights : 0 } });
-        }}
-      >
-        Kirim Pengajuan
+      {error && (
+        <div className="mb-3">
+          <Note tone="danger" icon={Ic.alert}>{error}</Note>
+        </div>
+      )}
+      <Button variant="primary" disabled={busy} onClick={submit}>
+        {busy ? "Mengirim…" : "Kirim Pengajuan"}
       </Button>
     </div>
   );

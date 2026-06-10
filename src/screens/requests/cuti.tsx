@@ -10,7 +10,14 @@ import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { ScreenHead } from "@/components/screen-head";
 import { SentScaffold } from "@/components/sent-scaffold";
 import { Ic, RIc, bigClock } from "@/components/icons";
-import { useApp } from "@/app/store";
+import { useApp, dateStr, fmtDateLong } from "@/app/store";
+
+const fmtD = (d: Date) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+const addDays = (d: Date, n: number) => {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+};
 
 type LeaveType = "tahunan" | "sakit" | "darurat" | "duka";
 type Place = "inCity" | "outside";
@@ -32,23 +39,34 @@ const LABEL: Record<LeaveType, string> = {
 // ── CUTI · 1 — form with dynamic rules per leave type ────────────
 export function CutiFormScreen() {
   const navigate = useNavigate();
-  const { leaveBalance, addRequest } = useApp();
+  const { leaveBalance, submitCuti } = useApp();
   const [type, setType] = React.useState<LeaveType>("tahunan");
   const [place, setPlace] = React.useState<Place>("inCity");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const bereMax = place === "inCity" ? 2 : 4;
+  const start = new Date();
 
-  function submit() {
+  async function submit() {
     if (type === "sakit") {
       navigate("/requests/cuti/sakit");
       return;
     }
-    addRequest({
-      kind: "cuti",
-      title: LABEL[type],
-      detail: type === "duka" ? `${bereMax} hari · mulai 10 Jun` : "1 hari · 10 Jun",
-      status: "Menunggu",
-    });
-    navigate("/requests/cuti/sent", { state: { type, days: type === "duka" ? bereMax : 1 } });
+    setBusy(true);
+    setError(null);
+    try {
+      const days = type === "duka" ? bereMax : 1;
+      await submitCuti({
+        type,
+        startDate: dateStr(start),
+        days,
+        ...(type === "duka" ? { place } : {}),
+      });
+      navigate("/requests/cuti/sent", { state: { type, days } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+      setBusy(false);
+    }
   }
 
   return (
@@ -62,11 +80,11 @@ export function CutiFormScreen() {
       <div className="flex gap-[10px] mb-4">
         <div className="flex-1">
           <FieldLabel upper>Mulai</FieldLabel>
-          <PseudoField icon={Ic.calendar}>10 Jun</PseudoField>
+          <PseudoField icon={Ic.calendar}>{fmtD(start)}</PseudoField>
         </div>
         <div className="flex-1">
           <FieldLabel upper>Selesai</FieldLabel>
-          <PseudoField icon={Ic.calendar}>{type === "duka" ? `${10 + bereMax - 1} Jun` : "11 Jun"}</PseudoField>
+          <PseudoField icon={Ic.calendar}>{fmtD(addDays(start, type === "duka" ? bereMax - 1 : 1))}</PseudoField>
         </div>
       </div>
 
@@ -118,7 +136,14 @@ export function CutiFormScreen() {
       )}
 
       <div className="flex-1 min-h-4" />
-      <Button variant="primary" onClick={submit}>{type === "sakit" ? "Lanjutkan" : "Kirim Pengajuan"}</Button>
+      {error && (
+        <div className="mb-3">
+          <Note tone="danger" icon={RIc.siren}>{error}</Note>
+        </div>
+      )}
+      <Button variant="primary" disabled={busy} onClick={submit}>
+        {busy ? "Mengirim…" : type === "sakit" ? "Lanjutkan" : "Kirim Pengajuan"}
+      </Button>
     </div>
   );
 }
@@ -126,8 +151,23 @@ export function CutiFormScreen() {
 // ── CUTI · 2 — sakit, doctor's note toggle ───────────────────────
 export function CutiSakitScreen() {
   const navigate = useNavigate();
-  const { leaveBalance, addRequest } = useApp();
+  const { leaveBalance, submitCuti } = useApp();
   const [hasNote, setHasNote] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const today = new Date();
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      await submitCuti({ type: "sakit", startDate: dateStr(today), days: 1, doctorNote: hasNote });
+      navigate("/requests/cuti/sent", { state: { type: "sakit", days: 1 } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
@@ -154,26 +194,20 @@ export function CutiSakitScreen() {
         <FieldLabel upper>Ringkasan</FieldLabel>
         <SummaryCard>
           <Row k="Jenis" v="Cuti Sakit" />
-          <Row k="Tanggal" v="10 Jun 2026" />
+          <Row k="Tanggal" v={fmtDateLong(today)} />
           <Row k="Surat dokter" v={hasNote ? "Terlampir" : "Tidak ada"} />
           <Row k="Potong saldo tahunan" v={hasNote ? "Tidak" : "1 hari"} last />
         </SummaryCard>
       </div>
 
       <div className="flex-1 min-h-4" />
-      <Button
-        variant="primary"
-        onClick={() => {
-          addRequest({
-            kind: "cuti",
-            title: "Cuti Sakit",
-            detail: hasNote ? "1 hari · surat dokter" : "1 hari · tanpa surat",
-            status: "Menunggu",
-          });
-          navigate("/requests/cuti/sent", { state: { type: "sakit", days: 1 } });
-        }}
-      >
-        Kirim Pengajuan
+      {error && (
+        <div className="mb-3">
+          <Note tone="danger" icon={Ic.alert}>{error}</Note>
+        </div>
+      )}
+      <Button variant="primary" disabled={busy} onClick={submit}>
+        {busy ? "Mengirim…" : "Kirim Pengajuan"}
       </Button>
     </div>
   );
@@ -194,7 +228,7 @@ export function CutiSentScreen() {
       <SummaryCard>
         <Row k="Jenis" v={jenis} />
         <Row k="Durasi" v={`${days} hari`} />
-        <Row k="Tanggal" v="10 Jun 2026" />
+        <Row k="Tanggal" v={fmtDateLong(new Date())} />
         <Row k="Status" v="Menunggu persetujuan" last />
       </SummaryCard>
     </SentScaffold>

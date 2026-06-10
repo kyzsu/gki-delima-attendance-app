@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Ic } from "@/components/icons";
 import { useApp } from "@/app/store";
+import { ApiError } from "@/lib/api";
 
 /** Face verification — uses the front camera when available, falls back to a placeholder. */
 export function FaceScanScreen({ mode }: { mode: "in" | "out" }) {
   const navigate = useNavigate();
-  const { checkIn, checkOut } = useApp();
+  const { checkIn, checkOut, setLastDistanceM } = useApp();
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const [cameraOk, setCameraOk] = React.useState(false);
 
@@ -34,15 +35,36 @@ export function FaceScanScreen({ mode }: { mode: "in" | "out" }) {
     };
   }, []);
 
-  // Simulated match after the scan animation.
+  // The face match itself is simulated; the attendance API call is real.
+  // Both the scan animation and the request must finish before navigating.
   React.useEffect(() => {
-    const t = setTimeout(() => {
-      if (mode === "in") checkIn();
-      else checkOut();
-      navigate(mode === "in" ? "/checkin/success" : "/checkout/success", { replace: true });
-    }, 3200);
-    return () => clearTimeout(t);
-  }, [mode, checkIn, checkOut, navigate]);
+    let alive = true;
+    const base = mode === "in" ? "/checkin" : "/checkout";
+    const animation = new Promise((r) => setTimeout(r, 3200));
+    const record = mode === "in" ? checkIn() : checkOut();
+
+    Promise.all([record, animation])
+      .then(() => {
+        if (alive) navigate(`${base}/success`, { replace: true });
+      })
+      .catch(async (err) => {
+        await animation;
+        if (!alive) return;
+        if (err instanceof ApiError && err.body.reason === "out-of-range") {
+          if (typeof err.body.distanceM === "number") setLastDistanceM(err.body.distanceM);
+          navigate(`${base}/out-of-range`, { replace: true });
+        } else if (err instanceof ApiError && err.body.reason === "gps-off") {
+          navigate(`${base}/gps-off`, { replace: true });
+        } else {
+          // Already recorded today, session expired, server down, … — Home
+          // shows the authoritative state.
+          navigate("/home", { replace: true });
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [mode, checkIn, checkOut, navigate, setLastDistanceM]);
 
   return (
     <div

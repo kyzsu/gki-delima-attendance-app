@@ -1,8 +1,9 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Ic } from "@/components/icons";
 import { fmtDateShort, fmtTime } from "@/app/store";
+import { api } from "@/lib/api";
 
 function TimelineRow({
   state,
@@ -47,12 +48,30 @@ function TimelineRow({
 
 export function ApprovalScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const now = React.useMemo(() => new Date(), []);
-  // Simulated admin approval for the demo build.
+  const { signupId, name } = (location.state ?? {}) as { signupId?: number; name?: string };
+
+  // Poll the approval status — in server demo mode this flips to approved
+  // after ~4.5 s, mirroring the original prototype timing.
   React.useEffect(() => {
-    const t = setTimeout(() => navigate("/signup/success"), 4500);
-    return () => clearTimeout(t);
-  }, [navigate]);
+    if (!signupId) {
+      const t = setTimeout(() => navigate("/signup/success"), 4500);
+      return () => clearTimeout(t);
+    }
+    const t = setInterval(async () => {
+      try {
+        const res = await api.signupStatus(signupId);
+        if (res.status === "approved") {
+          clearInterval(t);
+          navigate("/signup/success", { state: { name } });
+        }
+      } catch {
+        // keep polling — transient network errors shouldn't kill the flow
+      }
+    }, 1200);
+    return () => clearInterval(t);
+  }, [signupId, name, navigate]);
 
   return (
     <div className="flex flex-col flex-1 bg-bg items-center text-center px-7 pt-[78px] pb-11">

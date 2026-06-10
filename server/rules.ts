@@ -13,9 +13,11 @@ export const CHURCH = {
 export const GEOFENCE_RADIUS_M = 50;
 
 /** Demo mode: location checks resolve in-range without real GPS and
- *  pending signups auto-approve after AUTO_APPROVE_MS. Disable with
- *  GKI_DEMO_MODE=false. */
-export const DEMO_MODE = process.env.GKI_DEMO_MODE !== "false";
+ *  pending signups auto-approve after AUTO_APPROVE_MS. Defaults to ON in
+ *  development and OFF in production; override with GKI_DEMO_MODE=true/false. */
+export const DEMO_MODE = process.env.GKI_DEMO_MODE
+  ? process.env.GKI_DEMO_MODE !== "false"
+  : process.env.NODE_ENV !== "production";
 export const AUTO_APPROVE_MS = 4500;
 
 export function haversineM(aLat: number, aLng: number, bLat: number, bLng: number) {
@@ -32,6 +34,10 @@ export function haversineM(aLat: number, aLng: number, bLat: number, bLng: numbe
 // ── Attendance ───────────────────────────────────────────────────
 /** Check-ins at or after this hour are flagged late (matches store.tsx). */
 export const LATE_HOUR = 8;
+
+/** All business dates/times are evaluated in church-local time, regardless
+ *  of the server's clock (cloud hosts run UTC). */
+export const APP_TZ = "Asia/Jakarta";
 
 // ── Cuti (leave) ─────────────────────────────────────────────────
 export type LeaveType = "tahunan" | "sakit" | "darurat" | "duka";
@@ -86,22 +92,40 @@ export const fmtIDR = (n: number) => "Rp " + n.toLocaleString("id-ID");
 export const fmtHours = (h: number) =>
   h.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-/** Local date as YYYY-MM-DD. */
+/** Date in church-local time as YYYY-MM-DD (en-CA gives ISO order). */
 export function dateStr(d = new Date()) {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(d);
+}
+
+/** Hour of day (0–23) in church-local time. */
+export function hourOfDay(d = new Date()) {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", { timeZone: APP_TZ, hour: "2-digit", hour12: false }).format(d),
+  );
+}
+
+/** Pure calendar math on YYYY-MM-DD strings — noon UTC avoids DST/offset
+ *  edge cases entirely. */
+export function addDaysStr(date: string, days: number) {
+  const d = new Date(date + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function weekdayLong(date: string) {
+  return new Date(date + "T12:00:00Z").toLocaleDateString("id-ID", {
+    weekday: "long",
+    timeZone: "UTC",
+  });
 }
 
 /** Monday of the ISO week containing the given YYYY-MM-DD date. */
 export function weekStart(date: string) {
-  const d = new Date(date + "T00:00:00");
-  const day = (d.getDay() + 6) % 7; // 0 = Monday
-  d.setDate(d.getDate() - day);
-  return dateStr(d);
+  const d = new Date(date + "T12:00:00Z");
+  const day = (d.getUTCDay() + 6) % 7; // 0 = Monday
+  return addDaysStr(date, -day);
 }
 
 export function weekEnd(date: string) {
-  const d = new Date(weekStart(date) + "T00:00:00");
-  d.setDate(d.getDate() + 6);
-  return dateStr(d);
+  return addDaysStr(weekStart(date), 6);
 }

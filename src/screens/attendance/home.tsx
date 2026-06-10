@@ -69,15 +69,15 @@ function HomeSkeleton() {
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { user, attendance, checkInAt, log } = useApp();
+  const { ready, user, attendance, checkInAt, log } = useApp();
   const now = useClock();
-  const [loading, setLoading] = React.useState(true);
+  const [delayDone, setDelayDone] = React.useState(false);
   React.useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 900);
+    const t = setTimeout(() => setDelayDone(true), 900);
     return () => clearTimeout(t);
   }, []);
 
-  if (loading) return <HomeSkeleton />;
+  if (!ready || !delayDone) return <HomeSkeleton />;
 
   const checkedIn = attendance === "in" && checkInAt;
 

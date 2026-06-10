@@ -1,7 +1,20 @@
 import * as React from "react";
+import {
+  api,
+  ApiError,
+  clearToken,
+  getToken,
+  setToken,
+  type ApiConfig,
+  type ApiRequest,
+  type ApiToday,
+  type ApiUser,
+  type Coords,
+} from "@/lib/api";
 
 // ── Geofence configuration ───────────────────────────────────────
-// Replace with the real GKI Delima coordinates before production.
+// Display fallback; the live values come from GET /api/config
+// (set GKI_DEMO_MODE=false on the server to require real GPS).
 export const CHURCH = {
   name: "GKI Delima",
   address: "GKI Delima · Jl. Delima Raya No. 1",
@@ -9,10 +22,6 @@ export const CHURCH = {
   lng: 106.7892,
 };
 export const GEOFENCE_RADIUS_M = 50;
-
-/** Demo mode: when true, location checks resolve in-range without real GPS.
- *  Override per-visit with ?force=far or ?force=gpsoff on the check-in route. */
-export const DEMO_MODE = true;
 
 export function haversineM(aLat: number, aLng: number, bLat: number, bLng: number) {
   const R = 6371000;
@@ -26,21 +35,39 @@ export function haversineM(aLat: number, aLng: number, bLat: number, bLng: numbe
 }
 
 export type LocationResult =
-  | { kind: "in-range"; distanceM: number }
-  | { kind: "out-of-range"; distanceM: number }
+  | ({ kind: "in-range"; distanceM: number } & Coords)
+  | ({ kind: "out-of-range"; distanceM: number } & Coords)
   | { kind: "gps-off" };
 
-export function checkLocation(force?: string | null): Promise<LocationResult> {
-  return new Promise((resolve) => {
-    if (force === "far") return resolve({ kind: "out-of-range", distanceM: 1200 });
-    if (force === "gpsoff") return resolve({ kind: "gps-off" });
-    if (DEMO_MODE) return resolve({ kind: "in-range", distanceM: 18 });
+let configCache: Promise<ApiConfig> | null = null;
+function getConfig() {
+  configCache ??= api.config().catch(() => {
+    configCache = null;
+    return { church: CHURCH, geofenceRadiusM: GEOFENCE_RADIUS_M, demoMode: true };
+  });
+  return configCache;
+}
 
-    if (!("geolocation" in navigator)) return resolve({ kind: "gps-off" });
+/** Pre-flight location check for the locating screen. The server re-validates
+ *  the geofence on check-in/out; in demo mode it resolves in-range without GPS.
+ *  Override per-visit with ?force=far or ?force=gpsoff on the check-in route. */
+export async function checkLocation(force?: string | null): Promise<LocationResult> {
+  if (force === "far") return { kind: "out-of-range", distanceM: 1200 };
+  if (force === "gpsoff") return { kind: "gps-off" };
+  const cfg = await getConfig();
+  if (cfg.demoMode) return { kind: "in-range", distanceM: 18 };
+
+  if (!("geolocation" in navigator)) return { kind: "gps-off" };
+  return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const d = haversineM(pos.coords.latitude, pos.coords.longitude, CHURCH.lat, CHURCH.lng);
-        resolve(d <= GEOFENCE_RADIUS_M ? { kind: "in-range", distanceM: Math.round(d) } : { kind: "out-of-range", distanceM: Math.round(d) });
+        const { latitude: lat, longitude: lng } = pos.coords;
+        const d = Math.round(haversineM(lat, lng, cfg.church.lat, cfg.church.lng));
+        resolve(
+          d <= cfg.geofenceRadiusM
+            ? { kind: "in-range", distanceM: d, lat, lng }
+            : { kind: "out-of-range", distanceM: d, lat, lng },
+        );
       },
       () => resolve({ kind: "gps-off" }),
       { enableHighAccuracy: true, timeout: 8000 },
@@ -72,6 +99,12 @@ export function fmtDuration(ms: number) {
   return `${String(h).padStart(2, "0")}j ${String(m % 60).padStart(2, "0")}m`;
 }
 
+/** Local date as YYYY-MM-DD (API date format). */
+export function dateStr(d = new Date()) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 // ── Store ────────────────────────────────────────────────────────
 export interface LogEntry {
   d: string;
@@ -80,42 +113,34 @@ export interface LogEntry {
   late?: boolean;
 }
 
-export interface RequestRecord {
-  kind: "cuti" | "dinas" | "lembur";
-  title: string;
-  detail: string;
-  status: "Menunggu" | "Disetujui";
-}
+export type RequestRecord = ApiRequest;
 
 interface AppState {
+  /** False until the session bootstrap (token → /auth/me) finishes. */
+  ready: boolean;
+  authed: boolean;
   user: { name: string; initials: string; email: string };
-  setUserName: (name: string) => void;
+  leaveBalance: number;
 
   attendance: "none" | "in" | "done";
   checkInAt: Date | null;
   checkOutAt: Date | null;
   lastDistanceM: number;
   setLastDistanceM: (n: number) => void;
-  checkIn: () => void;
-  checkOut: () => void;
+  /** Coordinates captured on the locating screen, sent with check-in/out. */
+  setPendingLoc: (loc: Coords) => void;
   log: LogEntry[];
-
-  leaveBalance: number;
   requests: RequestRecord[];
-  addRequest: (r: RequestRecord) => void;
+
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+  checkIn: () => Promise<void>;
+  checkOut: () => Promise<void>;
+  refresh: () => Promise<void>;
+  submitCuti: typeof api.submitCuti;
+  submitDinas: typeof api.submitDinas;
+  submitLembur: typeof api.submitLembur;
 }
-
-const SEED_LOG: LogEntry[] = [
-  { d: "Kemarin", in: "07.52", out: "16.05" },
-  { d: "Sen, 8 Jun", in: "07.48", out: "16.12" },
-  { d: "Jum, 5 Jun", in: "08.06", out: "16.01", late: true },
-];
-
-const SEED_REQUESTS: RequestRecord[] = [
-  { kind: "dinas", title: "Dinas — Bandung", detail: "2 mlm · Rp 1.025.000", status: "Disetujui" },
-  { kind: "lembur", title: "Lembur — Kamis", detail: "2 jam", status: "Menunggu" },
-  { kind: "cuti", title: "Cuti Tahunan", detail: "1 hari · 10 Jun", status: "Disetujui" },
-];
 
 const AppContext = React.createContext<AppState | null>(null);
 
@@ -128,45 +153,130 @@ function initials(name: string) {
     .join("");
 }
 
+function logLabel(date: string) {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date === dateStr(today)) return "Hari ini";
+  if (date === dateStr(yesterday)) return "Kemarin";
+  return fmtDateShort(new Date(date + "T00:00:00"));
+}
+
+function toLogEntry(e: { date: string; checkIn: string; checkOut: string | null; late: boolean }): LogEntry {
+  return {
+    d: logLabel(e.date),
+    in: fmtTime(new Date(e.checkIn)),
+    out: e.checkOut ? fmtTime(new Date(e.checkOut)) : "—",
+    late: e.late,
+  };
+}
+
+const GUEST: ApiUser = {
+  id: 0,
+  name: "Karyawan",
+  nip: "",
+  email: "",
+  phone: "",
+  role: "employee",
+  status: "approved",
+  leaveBalance: 0,
+};
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [name, setName] = React.useState("Ruth Simanjuntak");
-  const [attendance, setAttendance] = React.useState<AppState["attendance"]>("none");
-  const [checkInAt, setCheckInAt] = React.useState<Date | null>(null);
-  const [checkOutAt, setCheckOutAt] = React.useState<Date | null>(null);
+  // Without a stored token there is no session to restore — ready immediately.
+  const [ready, setReady] = React.useState(() => !getToken());
+  const [authed, setAuthed] = React.useState(false);
+  const [apiUser, setApiUser] = React.useState<ApiUser>(GUEST);
+  const [today, setToday] = React.useState<ApiToday | null>(null);
+  const [log, setLog] = React.useState<LogEntry[]>([]);
+  const [requests, setRequests] = React.useState<RequestRecord[]>([]);
   const [lastDistanceM, setLastDistanceM] = React.useState(18);
-  const [log, setLog] = React.useState<LogEntry[]>(SEED_LOG);
-  const [requests, setRequests] = React.useState<RequestRecord[]>(SEED_REQUESTS);
+  const pendingLoc = React.useRef<Coords>({});
+
+  const loadSession = React.useCallback(async () => {
+    const [me, logRows, reqRows] = await Promise.all([
+      api.me(),
+      api.attendanceLog(),
+      api.requests(),
+    ]);
+    setApiUser(me.user);
+    setToday(me.today);
+    setLog(logRows.map(toLogEntry));
+    setRequests(reqRows);
+    setAuthed(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (!getToken()) return;
+    // False positive: every setState in loadSession happens after an await.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadSession()
+      .catch((e) => {
+        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) clearToken();
+      })
+      .finally(() => setReady(true));
+  }, [loadSession]);
 
   const value: AppState = {
-    user: { name, initials: initials(name), email: "ruth.simanjuntak@gkidelima.org" },
-    setUserName: setName,
-    attendance,
-    checkInAt,
-    checkOutAt,
+    ready,
+    authed,
+    user: { name: apiUser.name, initials: initials(apiUser.name), email: apiUser.email },
+    leaveBalance: apiUser.leaveBalance,
+
+    attendance: today ? (today.checkOut ? "done" : "in") : "none",
+    checkInAt: today ? new Date(today.checkIn) : null,
+    checkOutAt: today?.checkOut ? new Date(today.checkOut) : null,
     lastDistanceM,
     setLastDistanceM,
-    checkIn: () => {
-      setCheckInAt(new Date());
-      setAttendance("in");
-    },
-    checkOut: () => {
-      const out = new Date();
-      setCheckOutAt(out);
-      setAttendance("done");
-      setLog((l) => [
-        {
-          d: "Hari ini",
-          in: checkInAt ? fmtTime(checkInAt) : "—",
-          out: fmtTime(out),
-          late: checkInAt ? checkInAt.getHours() >= 8 : false,
-        },
-        ...l,
-      ]);
+    setPendingLoc: (loc) => {
+      pendingLoc.current = loc;
     },
     log,
-    leaveBalance: 7,
     requests,
-    addRequest: (r) => setRequests((q) => [r, ...q]),
+
+    login: async (email, password) => {
+      const res = await api.login(email, password);
+      setToken(res.token);
+      await loadSession();
+    },
+    logout: () => {
+      clearToken();
+      setAuthed(false);
+      setApiUser(GUEST);
+      setToday(null);
+      setLog([]);
+      setRequests([]);
+    },
+    checkIn: async () => {
+      const res = await api.checkIn(pendingLoc.current);
+      setToday({ checkIn: res.checkIn, checkOut: null, late: res.late, distanceM: res.distanceM });
+      setLastDistanceM(res.distanceM);
+      setLog((await api.attendanceLog()).map(toLogEntry));
+    },
+    checkOut: async () => {
+      const res = await api.checkOut(pendingLoc.current);
+      setToday((t) => (t ? { ...t, checkOut: res.checkOut } : t));
+      setLastDistanceM(res.distanceM);
+      setLog((await api.attendanceLog()).map(toLogEntry));
+    },
+    refresh: loadSession,
+    submitCuti: async (data) => {
+      const res = await api.submitCuti(data);
+      const [me, reqRows] = await Promise.all([api.me(), api.requests()]);
+      setApiUser(me.user);
+      setRequests(reqRows);
+      return res;
+    },
+    submitDinas: async (data) => {
+      const res = await api.submitDinas(data);
+      setRequests(await api.requests());
+      return res;
+    },
+    submitLembur: async (data) => {
+      const res = await api.submitLembur(data);
+      setRequests(await api.requests());
+      return res;
+    },
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

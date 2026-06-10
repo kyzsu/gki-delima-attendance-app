@@ -1,5 +1,5 @@
-import { createBrowserRouter, Outlet, RouterProvider } from "react-router-dom";
-import { AppProvider } from "@/app/store";
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router-dom";
+import { AppProvider, useApp } from "@/app/store";
 import { SignupProvider } from "@/screens/signup/signup-context";
 
 import { SplashScreen } from "@/screens/auth/splash";
@@ -55,6 +55,14 @@ function SignupShell() {
   );
 }
 
+/** Gates the app screens behind a valid session. */
+function RequireAuth() {
+  const { ready, authed } = useApp();
+  if (!ready) return null;
+  if (!authed) return <Navigate to="/login" replace />;
+  return <Outlet />;
+}
+
 const router = createBrowserRouter([
   {
     element: <Shell />,
@@ -71,34 +79,39 @@ const router = createBrowserRouter([
           { path: "/signup/success", element: <SuccessScreen /> },
         ],
       },
-      { path: "/home", element: <HomeScreen /> },
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: "/home", element: <HomeScreen /> },
 
-      { path: "/checkin/locating", element: <LocatingScreen mode="in" /> },
-      { path: "/checkin/ready", element: <CheckReadyScreen mode="in" /> },
-      { path: "/checkin/face", element: <FaceScanScreen mode="in" /> },
-      { path: "/checkin/success", element: <CheckSuccessScreen mode="in" /> },
-      { path: "/checkin/out-of-range", element: <OutOfRangeScreen mode="in" /> },
-      { path: "/checkin/gps-off", element: <GpsOffScreen mode="in" /> },
+          { path: "/checkin/locating", element: <LocatingScreen mode="in" /> },
+          { path: "/checkin/ready", element: <CheckReadyScreen mode="in" /> },
+          { path: "/checkin/face", element: <FaceScanScreen mode="in" /> },
+          { path: "/checkin/success", element: <CheckSuccessScreen mode="in" /> },
+          { path: "/checkin/out-of-range", element: <OutOfRangeScreen mode="in" /> },
+          { path: "/checkin/gps-off", element: <GpsOffScreen mode="in" /> },
 
-      { path: "/checkout/locating", element: <LocatingScreen mode="out" /> },
-      { path: "/checkout/ready", element: <CheckReadyScreen mode="out" /> },
-      { path: "/checkout/face", element: <FaceScanScreen mode="out" /> },
-      { path: "/checkout/success", element: <CheckSuccessScreen mode="out" /> },
-      { path: "/checkout/out-of-range", element: <OutOfRangeScreen mode="out" /> },
-      { path: "/checkout/gps-off", element: <GpsOffScreen mode="out" /> },
+          { path: "/checkout/locating", element: <LocatingScreen mode="out" /> },
+          { path: "/checkout/ready", element: <CheckReadyScreen mode="out" /> },
+          { path: "/checkout/face", element: <FaceScanScreen mode="out" /> },
+          { path: "/checkout/success", element: <CheckSuccessScreen mode="out" /> },
+          { path: "/checkout/out-of-range", element: <OutOfRangeScreen mode="out" /> },
+          { path: "/checkout/gps-off", element: <GpsOffScreen mode="out" /> },
 
-      { path: "/requests", element: <RequestHubScreen /> },
-      { path: "/requests/cuti", element: <CutiFormScreen /> },
-      { path: "/requests/cuti/sakit", element: <CutiSakitScreen /> },
-      { path: "/requests/cuti/sent", element: <CutiSentScreen /> },
-      { path: "/requests/dinas", element: <DinasFormScreen /> },
-      { path: "/requests/dinas/allowance", element: <DinasAllowanceScreen /> },
-      { path: "/requests/dinas/sent", element: <DinasSentScreen /> },
-      { path: "/requests/lembur", element: <LemburFormScreen /> },
-      { path: "/requests/lembur/sent", element: <LemburSentScreen /> },
+          { path: "/requests", element: <RequestHubScreen /> },
+          { path: "/requests/cuti", element: <CutiFormScreen /> },
+          { path: "/requests/cuti/sakit", element: <CutiSakitScreen /> },
+          { path: "/requests/cuti/sent", element: <CutiSentScreen /> },
+          { path: "/requests/dinas", element: <DinasFormScreen /> },
+          { path: "/requests/dinas/allowance", element: <DinasAllowanceScreen /> },
+          { path: "/requests/dinas/sent", element: <DinasSentScreen /> },
+          { path: "/requests/lembur", element: <LemburFormScreen /> },
+          { path: "/requests/lembur/sent", element: <LemburSentScreen /> },
 
-      { path: "/history", element: <HistoryScreen /> },
-      { path: "/profile", element: <ProfileScreen /> },
+          { path: "/history", element: <HistoryScreen /> },
+          { path: "/profile", element: <ProfileScreen /> },
+        ],
+      },
     ],
   },
 ]);

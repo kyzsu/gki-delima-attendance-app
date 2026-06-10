@@ -8,11 +8,21 @@ import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { ScreenHead } from "@/components/screen-head";
 import { SentScaffold } from "@/components/sent-scaffold";
 import { Ic, bigClock } from "@/components/icons";
-import { useApp } from "@/app/store";
+import { useApp, dateStr } from "@/app/store";
 
 const DAILY_CAP = 3;
 const WEEKLY_CAP = 14;
 const WEEKLY_USED = 4.5;
+
+/** Overtime is requested for the next working day. */
+function lemburDate() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+
+const fmtDay = (d: Date) =>
+  d.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "short" });
 
 const fmtH = (h: number) => h.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -41,11 +51,26 @@ function LemburGauge({ hours, cap }: { hours: number; cap: number }) {
 // Within cap = positive path; over cap = blocked with non-payable breakdown.
 export function LemburFormScreen() {
   const navigate = useNavigate();
-  const { addRequest } = useApp();
+  const { submitLembur } = useApp();
   const [hours, setHours] = React.useState(2);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const over = hours > DAILY_CAP;
   const payable = Math.min(hours, DAILY_CAP);
   const nonPayable = Math.max(0, hours - DAILY_CAP);
+  const date = lemburDate();
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      await submitLembur({ date: dateStr(date), hours });
+      navigate("/requests/lembur/sent", { state: { hours, date: date.toISOString() } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
@@ -53,7 +78,7 @@ export function LemburFormScreen() {
       <div className="flex gap-[10px] mb-4">
         <div className="flex-1">
           <FieldLabel upper>Tanggal</FieldLabel>
-          <PseudoField icon={Ic.calendar}>Kamis, 11 Jun</PseudoField>
+          <PseudoField icon={Ic.calendar}>{fmtDay(date)}</PseudoField>
         </div>
       </div>
 
@@ -100,15 +125,13 @@ export function LemburFormScreen() {
       </div>
 
       <div className="flex-1 min-h-4" />
-      <Button
-        variant="primary"
-        disabled={over}
-        onClick={() => {
-          addRequest({ kind: "lembur", title: "Lembur — Kamis", detail: `${fmtH(hours)} jam`, status: "Menunggu" });
-          navigate("/requests/lembur/sent", { state: { hours } });
-        }}
-      >
-        {over ? "Kurangi jam untuk melanjutkan" : "Kirim Pengajuan"}
+      {error && (
+        <div className="mb-3">
+          <Note tone="danger" icon={Ic.alert}>{error}</Note>
+        </div>
+      )}
+      <Button variant="primary" disabled={over || busy} onClick={submit}>
+        {over ? "Kurangi jam untuk melanjutkan" : busy ? "Mengirim…" : "Kirim Pengajuan"}
       </Button>
     </div>
   );
@@ -118,6 +141,7 @@ export function LemburFormScreen() {
 export function LemburSentScreen() {
   const location = useLocation();
   const hours: number = location.state?.hours ?? 2;
+  const date = location.state?.date ? new Date(location.state.date) : lemburDate();
   return (
     <SentScaffold
       icon={bigClock}
@@ -125,7 +149,7 @@ export function LemburSentScreen() {
       sub="Menunggu kunci tanda tangan Koordinator Personalia sebelum payout dihitung."
     >
       <SummaryCard>
-        <Row k="Tanggal" v="Kamis, 11 Jun" />
+        <Row k="Tanggal" v={fmtDay(date)} />
         <Row k="Durasi" v={`${fmtH(hours)} jam`} />
         <Row k="Tarif" v="1/173 gaji pokok" />
         <Row k="Status" v="Menunggu sign-off" last />

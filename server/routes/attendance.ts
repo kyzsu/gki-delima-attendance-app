@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Response } from "express";
 import { z } from "zod";
-import { db, type AttendanceRow } from "../db.ts";
+import { sql, type AttendanceRow } from "../db.ts";
 import { requireAuth } from "../middleware.ts";
 import {
   CHURCH,
@@ -10,6 +10,7 @@ import {
   LATE_HOUR,
   dateStr,
   haversineM,
+  hourOfDay,
 } from "../rules.ts";
 
 export const attendanceRouter = Router();
@@ -18,7 +19,7 @@ attendanceRouter.use(requireAuth);
 const locationSchema = z.object({
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
-  // Testing parity with the frontend's ?force=far / ?force=gpsoff params.
+  // Demo-only testing hook, mirroring the frontend's ?force= params.
   force: z.enum(["far", "gpsoff"]).optional(),
 });
 
@@ -28,8 +29,8 @@ type LocationCheck =
   | { kind: "gps-off" };
 
 function checkLocation(input: z.infer<typeof locationSchema>): LocationCheck {
-  if (input.force === "far") return { kind: "out-of-range", distanceM: 1200 };
-  if (input.force === "gpsoff") return { kind: "gps-off" };
+  if (DEMO_MODE && input.force === "far") return { kind: "out-of-range", distanceM: 1200 };
+  if (DEMO_MODE && input.force === "gpsoff") return { kind: "gps-off" };
   if (input.lat === undefined || input.lng === undefined) {
     return DEMO_MODE ? { kind: "in-range", distanceM: 18 } : { kind: "gps-off" };
   }
@@ -56,7 +57,7 @@ function rejectLocation(res: Response, loc: LocationCheck) {
   return false;
 }
 
-attendanceRouter.post("/check-in", (req, res) => {
+attendanceRouter.post("/check-in", async (req, res) => {
   const body = locationSchema.safeParse(req.body ?? {});
   if (!body.success) {
     res.status(400).json({ error: "Koordinat tidak valid." });
@@ -64,9 +65,9 @@ attendanceRouter.post("/check-in", (req, res) => {
   }
   const user = req.user!;
   const today = dateStr();
-  const existing = db
-    .prepare("SELECT * FROM attendance WHERE user_id = ? AND date = ?")
-    .get(user.id, today) as AttendanceRow | undefined;
+  const [existing] = await sql<AttendanceRow[]>`
+    SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${today}
+  `;
   if (existing) {
     res.status(409).json({ error: "Sudah check-in hari ini.", checkIn: existing.check_in });
     return;
@@ -76,23 +77,24 @@ attendanceRouter.post("/check-in", (req, res) => {
   const { distanceM } = loc as Extract<LocationCheck, { kind: "in-range" }>;
 
   const now = new Date();
-  const late = now.getHours() >= LATE_HOUR ? 1 : 0;
-  db.prepare(
-    "INSERT INTO attendance (user_id, date, check_in, late, distance_m) VALUES (?, ?, ?, ?, ?)",
-  ).run(user.id, today, now.toISOString(), late, distanceM);
-  res.status(201).json({ checkIn: now.toISOString(), late: !!late, distanceM });
+  const late = hourOfDay(now) >= LATE_HOUR;
+  await sql`
+    INSERT INTO attendance (user_id, date, check_in, late, distance_m)
+    VALUES (${user.id}, ${today}, ${now}, ${late}, ${distanceM})
+  `;
+  res.status(201).json({ checkIn: now.toISOString(), late, distanceM });
 });
 
-attendanceRouter.post("/check-out", (req, res) => {
+attendanceRouter.post("/check-out", async (req, res) => {
   const body = locationSchema.safeParse(req.body ?? {});
   if (!body.success) {
     res.status(400).json({ error: "Koordinat tidak valid." });
     return;
   }
   const user = req.user!;
-  const today = db
-    .prepare("SELECT * FROM attendance WHERE user_id = ? AND date = ?")
-    .get(user.id, dateStr()) as AttendanceRow | undefined;
+  const [today] = await sql<AttendanceRow[]>`
+    SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${dateStr()}
+  `;
   if (!today) {
     res.status(409).json({ error: "Belum check-in hari ini." });
     return;
@@ -106,38 +108,27 @@ attendanceRouter.post("/check-out", (req, res) => {
   const { distanceM } = loc as Extract<LocationCheck, { kind: "in-range" }>;
 
   const now = new Date();
-  db.prepare("UPDATE attendance SET check_out = ?, distance_m = ? WHERE id = ?").run(
-    now.toISOString(),
-    distanceM,
-    today.id,
-  );
+  await sql`UPDATE attendance SET check_out = ${now}, distance_m = ${distanceM} WHERE id = ${today.id}`;
   const workedMs = now.getTime() - new Date(today.check_in).getTime();
   res.json({ checkIn: today.check_in, checkOut: now.toISOString(), workedMs, distanceM });
 });
 
-attendanceRouter.get("/today", (req, res) => {
-  const row = db
-    .prepare("SELECT * FROM attendance WHERE user_id = ? AND date = ?")
-    .get(req.user!.id, dateStr()) as AttendanceRow | undefined;
+attendanceRouter.get("/today", async (req, res) => {
+  const [row] = await sql<AttendanceRow[]>`
+    SELECT * FROM attendance WHERE user_id = ${req.user!.id} AND date = ${dateStr()}
+  `;
   res.json(
-    row
-      ? { date: row.date, checkIn: row.check_in, checkOut: row.check_out, late: !!row.late }
-      : null,
+    row ? { date: row.date, checkIn: row.check_in, checkOut: row.check_out, late: row.late } : null,
   );
 });
 
 // Attendance log for /home and /history, newest first.
-attendanceRouter.get("/log", (req, res) => {
+attendanceRouter.get("/log", async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 30, 100);
-  const rows = db
-    .prepare("SELECT * FROM attendance WHERE user_id = ? ORDER BY date DESC LIMIT ?")
-    .all(req.user!.id, limit) as unknown as AttendanceRow[];
+  const rows = await sql<AttendanceRow[]>`
+    SELECT * FROM attendance WHERE user_id = ${req.user!.id} ORDER BY date DESC LIMIT ${limit}
+  `;
   res.json(
-    rows.map((r) => ({
-      date: r.date,
-      checkIn: r.check_in,
-      checkOut: r.check_out,
-      late: !!r.late,
-    })),
+    rows.map((r) => ({ date: r.date, checkIn: r.check_in, checkOut: r.check_out, late: r.late })),
   );
 });

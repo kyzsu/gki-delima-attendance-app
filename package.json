@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "server": "tsx server/index.ts",
-    "server:dev": "tsx watch server/index.ts",
+    "dev": "vite --host",
+    "server": "node --env-file-if-exists=.env --import tsx server/index.ts",
+    "server:dev": "node --env-file-if-exists=.env --import tsx --watch server/index.ts",
+    "db:setup": "node --env-file-if-exists=.env --import tsx server/setup.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -16,6 +17,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "express": "^5.2.1",
+    "postgres": "^3.4.9",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.17.0",

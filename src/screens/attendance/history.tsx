@@ -40,12 +40,13 @@ function Tile({ label, value }: { label: string; value: string }) {
 }
 
 export function HistoryScreen() {
-  const { log } = useApp();
-  const [loading, setLoading] = React.useState(true);
+  const { ready, log } = useApp();
+  const [delayDone, setDelayDone] = React.useState(false);
   React.useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 900);
+    const t = setTimeout(() => setDelayDone(true), 900);
     return () => clearTimeout(t);
   }, []);
+  const loading = !ready || !delayDone;
 
   const onTime = log.filter((l) => !l.late).length;
   const late = log.length - onTime;

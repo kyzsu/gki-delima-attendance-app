@@ -11,15 +11,17 @@ API backend (`server/`).
 - **react-router-dom** for navigation
 - **shadcn-style UI atoms** hand-written with `class-variance-authority` + `tailwind-merge` (`src/components/ui/`)
 - Font: Plus Jakarta Sans (Google Fonts)
-- **Backend:** Express 5 + Zod + Node's built-in `node:sqlite` (no native deps), run with `tsx`
+- **Backend:** Express 5 + Zod + Postgres (Supabase) via `postgres.js`, run with `tsx`
 
 ## Run
 
 ```bash
 npm install
-npm run dev         # frontend · http://localhost:5173 (proxies /api → :3001)
-npm run server:dev  # backend  · http://localhost:3001 (watch mode; `npm run server` for plain)
-npm run build       # type-check (app + server) + production build
+cp .env.example .env   # fill in DATABASE_URL (Supabase pooled connection string)
+npm run db:setup       # apply schema + seed admin (add `-- --demo` for demo data)
+npm run dev            # frontend · http://localhost:5173 (proxies /api → :3001)
+npm run server:dev     # backend  · http://localhost:3001 (watch mode; `npm run server` for plain)
+npm run build          # type-check (app + server) + production build
 ```
 
 ## Feature map
@@ -39,13 +41,16 @@ npm run build       # type-check (app + server) + production build
 
 ## Demo mode
 
-`src/app/store.tsx`:
+Demo mode is controlled by the **server** (`GKI_DEMO_MODE`, default on) and exposed to
+the frontend via `GET /api/config`:
 
-- `DEMO_MODE = true` — geolocation always resolves **in range** (~±18 m) so the full
-  happy path is clickable without real GPS. Set to `false` to use the browser
-  Geolocation API + haversine distance against the real geofence.
-- `CHURCH` coords are a **Jakarta placeholder** (`-6.1944, 106.7892`). Replace with the
-  actual GKI Delima coordinates before production.
+- Demo on — location checks always resolve **in range** (~±18 m) so the full happy
+  path is clickable without real GPS, and signups auto-approve after ~4.5 s.
+- `GKI_DEMO_MODE=false` — the frontend uses the browser Geolocation API and the server
+  enforces the haversine distance against the real geofence; signups wait for a real
+  admin decision (`POST /api/admin/users/:id/decision`).
+- `CHURCH` coords (`server/rules.ts`) are a **Jakarta placeholder** (`-6.1944, 106.7892`).
+  Replace with the actual GKI Delima coordinates before production.
 - `GEOFENCE_RADIUS_M = 50`.
 
 ### Forcing failure states
@@ -59,24 +64,29 @@ Same for `/checkout/locating`.
 
 ### Simulated pieces
 
-- **Admin approval** (`/signup/approval`) auto-advances after ~4.5 s.
 - **Face scan** uses the front camera via `getUserMedia` when available, with a graceful
-  gradient placeholder fallback; completes after ~3.2 s.
-- App state (attendance, log, leave balance, requests) lives in a React context
-  (`AppProvider`) — in-memory only; the frontend is not wired to the API yet.
+  gradient placeholder fallback; the face *match* is simulated (~3.2 s) but the
+  attendance record is real — the scan completion calls `POST /api/attendance/check-in`
+  (or `check-out`) and the server validates the geofence again.
+- Everything else is live: app state (attendance, log, leave balance, requests) is
+  fetched from the API via `AppProvider` (`src/app/store.tsx`) using the typed client
+  in `src/lib/api.ts`. The session token is kept in `localStorage` and app routes are
+  gated by `RequireAuth` (`src/app/router.tsx`).
 
 ## Backend (`server/`)
 
-Express 5 + Zod + `node:sqlite` (requires Node ≥ 22.5; the DB file is created at
-`server/data/gki.db` on first start and seeded with demo data). The Vite dev server
-proxies `/api` to `http://localhost:3001`.
+Express 5 + Zod + Postgres on Supabase (`postgres.js` client; schema in
+`server/schema.sql`, applied by `npm run db:setup`). The Vite dev server proxies
+`/api` to `http://localhost:3001`. All business dates/times are evaluated in
+`Asia/Jakarta` regardless of the server's clock.
 
-Seeded accounts:
+Seeded accounts (`db:setup` seeds the admin from `ADMIN_EMAIL`/`ADMIN_PASSWORD`;
+the demo employee only with `-- --demo`):
 
 | Account | Email | Password |
 |---|---|---|
-| Employee (Ruth Simanjuntak, saldo cuti 7) | `ruth.simanjuntak@gkidelima.org` | `gkidelima` |
-| Admin (Koordinator Personalia) | `admin@gkidelima.org` | `admin123` |
+| Admin (Koordinator Personalia) | `admin@gkidelima.org` (default) | `ADMIN_PASSWORD` (default `admin123`) |
+| Demo employee (Ruth Simanjuntak, saldo cuti 7) | `ruth.simanjuntak@gkidelima.org` | `gkidelima` |
 
 ### Endpoints
 
@@ -96,9 +106,27 @@ Seeded accounts:
 | Admin | `GET /api/admin/users`, `POST /api/admin/users/:id/decision`, `GET /api/admin/requests`, `POST /api/admin/requests/:id/decision` | approving a cuti tahunan deducts the leave balance |
 
 All business rules live in `server/rules.ts` (same constants as the frontend screens:
-geofence, leave matrices, dinas rates, lembur caps). Env vars: `PORT` (default 3001),
-`GKI_DB_PATH`, `JWT_SECRET`, `GKI_DEMO_MODE=false` to require real coordinates and
-manual admin approval.
+geofence, leave matrices, dinas rates, lembur caps). Env vars (see `.env.example`):
+`DATABASE_URL` (required), `JWT_SECRET` (required in production), `GKI_DEMO_MODE`
+(default: on in dev, off in production), `PORT` (default 3001), `ADMIN_EMAIL` /
+`ADMIN_PASSWORD` (db:setup seeding).
+
+## Deployment (Vercel + Supabase)
+
+- **Database** — Supabase Postgres. Use the **pooled** connection string
+  (Supavisor transaction mode, port 6543) as `DATABASE_URL`; the client runs with
+  `prepare: false` to be pooler-compatible. Apply the schema once with
+  `npm run db:setup`.
+- **API** — `api/index.ts` exports the Express app as a single Vercel serverless
+  function; `vercel.json` rewrites `/api/*` to it (the app routes on the original
+  URL) and everything else to the SPA's `index.html`.
+- **Frontend** — built by `npm run build` into `dist/`, served as static assets on
+  the same domain (no CORS needed; the dev-only CORS middleware is skipped in
+  production).
+- **Required Vercel env vars** — `DATABASE_URL`, `JWT_SECRET`. Optional:
+  `GKI_DEMO_MODE=true` to keep demo behaviour on a staging deployment.
+- Before real use: replace the placeholder `CHURCH` coordinates in
+  `server/rules.ts`.
 
 ## Design fidelity notes
 
