@@ -1,10 +1,10 @@
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
-import { authRouter } from "./routes/auth";
-import { attendanceRouter } from "./routes/attendance";
-import { requestsRouter } from "./routes/requests";
-import { adminRouter } from "./routes/admin";
-import { CHURCH, DEMO_MODE, GEOFENCE_RADIUS_M } from "./rules";
+import { authRouter } from "./routes/auth.js";
+import { attendanceRouter } from "./routes/attendance.js";
+import { requestsRouter } from "./routes/requests.js";
+import { adminRouter } from "./routes/admin.js";
+import { CHURCH, DEMO_MODE, GEOFENCE_RADIUS_M } from "./rules.js";
 
 export const app = express();
 app.use(express.json());

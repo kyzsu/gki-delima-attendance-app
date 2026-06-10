@@ -3,13 +3,14 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023"],
-    "module": "esnext",
     "types": ["node"],
     "skipLibCheck": true,
 
-    /* Bundler mode (run with tsx) */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    /* NodeNext — matches Vercel's function compiler, so relative imports
+       must use .js extensions (mapped to the .ts sources). tsx handles
+       this locally too. */
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,

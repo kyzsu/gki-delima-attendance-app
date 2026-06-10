@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
-import { sql, type RequestRow, type UserRow } from "../db";
-import { publicUser, requireAdmin } from "../middleware";
-import { approveRequest } from "./requests";
+import { sql, type RequestRow, type UserRow } from "../db.js";
+import { publicUser, requireAdmin } from "../middleware.js";
+import { approveRequest } from "./requests.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
