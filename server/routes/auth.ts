@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { hashPassword, signToken, verifyPassword } from "../auth.js";
 import { sql, type AttendanceRow, type UserRow } from "../db.js";
-import { requireAuth, publicUser } from "../middleware.js";
+import { invalidateUser, requireAuth, publicUser } from "../middleware.js";
 import { AUTO_APPROVE_MS, DEMO_MODE, dateStr, shiftsFor } from "../rules.js";
 
 export const authRouter = Router();
@@ -54,7 +54,10 @@ authRouter.get("/signup/:id/status", async (req, res) => {
         AND created_at <= now() - make_interval(secs => ${AUTO_APPROVE_MS / 1000})
       RETURNING id
     `;
-    if (updated.length > 0) user.status = "approved";
+    if (updated.length > 0) {
+      user.status = "approved";
+      invalidateUser(user.id);
+    }
   }
   res.json({ id: user.id, status: user.status });
 });

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { sql, type AttendanceRow, type RequestRow, type UserRow } from "../db.js";
-import { publicUser, requireAdmin } from "../middleware.js";
+import { invalidateUser, publicUser, requireAdmin } from "../middleware.js";
 import { approveRequest } from "./requests.js";
 import { POSITION_LABEL, addDaysStr, dateStr, shiftsFor, type Position } from "../rules.js";
 
@@ -32,6 +32,7 @@ adminRouter.post("/users/:id/decision", async (req, res) => {
     return;
   }
   await sql`UPDATE users SET status = ${body.data.decision} WHERE id = ${user.id}`;
+  invalidateUser(user.id);
   res.json({ id: user.id, status: body.data.decision });
 });
 
@@ -50,6 +51,7 @@ adminRouter.post("/users/:id/position", async (req, res) => {
     return;
   }
   await sql`UPDATE users SET position = ${body.data.position} WHERE id = ${user.id}`;
+  invalidateUser(user.id);
   res.json({ id: user.id, position: body.data.position });
 });
 

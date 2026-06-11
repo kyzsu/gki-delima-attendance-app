@@ -1,6 +1,16 @@
 import type { NextFunction, Request, Response } from "express";
 import { verifyToken } from "./auth.js";
 import { sql, type UserRow } from "./db.js";
+import { cacheDelete, cacheGet, cacheSet } from "./cache.js";
+
+/** Every authenticated request looks the user up — cache briefly, and bust
+ *  the entry whenever a mutation touches the user row. */
+const USER_TTL_MS = 30_000;
+const userKey = (id: number) => `user:${id}`;
+
+export function invalidateUser(id: number) {
+  cacheDelete(userKey(id));
+}
 
 declare global {
   namespace Express {
@@ -18,7 +28,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     res.status(401).json({ error: "Sesi tidak valid. Silakan masuk kembali." });
     return;
   }
-  const [user] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${payload.uid}`;
+  let user = cacheGet<UserRow>(userKey(payload.uid));
+  if (!user) {
+    [user] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${payload.uid}`;
+    if (user) cacheSet(userKey(user.id), user, USER_TTL_MS);
+  }
   if (!user || user.status !== "approved") {
     res.status(403).json({ error: "Akun belum aktif." });
     return;
