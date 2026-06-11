@@ -74,5 +74,7 @@ export function publicUser(u: UserRow) {
     position: u.position,
     status: u.status,
     leaveBalance: u.leave_balance,
+    mustChangePassword: u.must_change_password,
+    resetRequested: u.reset_requested_at !== null,
   };
 }

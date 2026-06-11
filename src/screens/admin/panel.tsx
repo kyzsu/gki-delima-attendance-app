@@ -5,7 +5,7 @@ import { Seg } from "@/components/ui/segmented";
 import { Note } from "@/components/ui/note";
 import { Sk } from "@/components/ui/skeleton";
 import { Ic, RIc } from "@/components/icons";
-import { useApp, fmtTime } from "@/app/store";
+import { useApp, fmtTime, fmtDateLong, greeting } from "@/app/store";
 import { statusChip } from "@/screens/attendance/home";
 import {
   api,
@@ -104,8 +104,11 @@ function DecideButtons({
 
 function EmptyNote({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-center text-[13px] text-muted font-semibold bg-tint rounded-[14px] px-4 py-5">
-      {children}
+    <div className="flex flex-col items-center gap-[10px] bg-tint rounded-[16px] px-5 py-6 text-center">
+      <span className="w-10 h-10 rounded-full bg-tint2 text-primary flex items-center justify-center">
+        {Ic.check}
+      </span>
+      <span className="text-[13px] text-muted font-semibold leading-[1.5]">{children}</span>
     </div>
   );
 }
@@ -137,6 +140,7 @@ export function AdminPanelScreen() {
   const [sessions, setSessions] = React.useState<AdminSession[] | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [tempPw, setTempPw] = React.useState<{ name: string; pw: string } | null>(null);
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -175,7 +179,22 @@ export function AdminPanelScreen() {
     }
   }
 
+  async function resetPassword(u: ApiUser) {
+    setBusyId(`rp${u.id}`);
+    setError(null);
+    try {
+      const res = await api.adminResetPassword(u.id);
+      setTempPw({ name: u.name, pw: res.tempPassword });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const pendingUsers = users?.filter((u) => u.status === "pending") ?? [];
+  const resetUsers = users?.filter((u) => u.resetRequested) ?? [];
   const decidedUsers = users?.filter((u) => u.status !== "pending" && u.role !== "admin") ?? [];
   const pendingReqs = requests?.filter((r) => r.status === "Menunggu") ?? [];
   const decidedReqs = requests?.filter((r) => r.status !== "Menunggu") ?? [];
@@ -191,7 +210,7 @@ export function AdminPanelScreen() {
           {user.initials}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[12.5px] text-muted font-semibold">Koordinator Personalia</div>
+          <div className="text-[12.5px] text-muted font-semibold">{greeting()}</div>
           <div className="text-[16.5px] font-extrabold text-ink tracking-[-0.2px] truncate">{user.name}</div>
         </div>
         <Button
@@ -205,10 +224,21 @@ export function AdminPanelScreen() {
           {Ic.logout}
         </Button>
       </div>
-      <h1 className="text-[24px] font-extrabold text-ink tracking-[-0.4px] mb-[2px]">Panel Admin</h1>
-      <p className="text-[13.5px] text-muted mb-[18px] leading-[1.45]">
-        Persetujuan pendaftaran & pengajuan karyawan.
-      </p>
+
+      {/* warm hero, matching the employee homepage */}
+      <div
+        className="rounded-[24px] text-white relative overflow-hidden mb-[18px]"
+        style={{ background: "var(--grad-hero)", boxShadow: "0 14px 30px var(--glow)", padding: "20px 22px 22px" }}
+      >
+        <div className="absolute rounded-full" style={{ top: -40, right: -30, width: 130, height: 130, background: "rgba(255,255,255,0.12)" }} />
+        <div className="relative">
+          <div className="text-[13px] font-semibold opacity-90">{fmtDateLong(new Date())}</div>
+          <div className="text-[24px] font-extrabold tracking-[-0.5px] mt-[2px]">Panel Admin</div>
+          <div className="text-[13px] opacity-90 mt-1 leading-[1.5]">
+            Persetujuan, presensi, dan kabar tim — semua di satu tempat. Selamat melayani 🙏
+          </div>
+        </div>
+      </div>
 
       <div className="mb-4">
         <Seg
@@ -234,7 +264,37 @@ export function AdminPanelScreen() {
           <ListSkeleton />
         ) : (
           <div className="flex flex-col gap-2">
-            {pendingUsers.length === 0 && <EmptyNote>Tidak ada pendaftaran menunggu.</EmptyNote>}
+            {tempPw && (
+              <Note tone="ok" icon={Ic.check}>
+                Sandi sementara untuk <b>{tempPw.name}</b>: <b style={{ fontFamily: "monospace" }}>{tempPw.pw}</b>
+                {" "}— sampaikan langsung ke yang bersangkutan. Mereka akan diminta membuat sandi baru saat masuk.
+              </Note>
+            )}
+            {resetUsers.map((u) => (
+              <div key={`reset-${u.id}`} className="bg-card rounded-[16px] px-[15px] py-[13px]" style={{ border: "1.5px solid var(--primary)" }}>
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-[10px] bg-tint2 text-primary flex items-center justify-center shrink-0">
+                    {Ic.lock}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13.5px] font-extrabold text-ink truncate">{u.name}</div>
+                    <div className="text-[11.5px] text-muted truncate">Lupa kata sandi — minta dibuatkan yang baru</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={busyId === `rp${u.id}`}
+                  onClick={() => resetPassword(u)}
+                  className="w-full mt-3 py-[9px] rounded-[11px] border-none text-white text-[12.5px] font-extrabold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ background: "var(--grad)" }}
+                >
+                  {busyId === `rp${u.id}` ? "Membuat…" : "Buatkan Sandi Sementara"}
+                </button>
+              </div>
+            ))}
+            {pendingUsers.length === 0 && (
+              <EmptyNote>Semua beres — tidak ada pendaftaran yang menunggu persetujuan.</EmptyNote>
+            )}
             {pendingUsers.map((u) => (
               <div key={u.id} className="bg-card border border-line rounded-[16px] px-[15px] py-[13px]">
                 <div className="flex items-center gap-3">
@@ -301,7 +361,9 @@ export function AdminPanelScreen() {
             <Note tone="info" icon={Ic.camera}>
               Presensi hari ini dengan <b>foto selfie</b> dan jarak GPS saat check-in/out.
             </Note>
-            {sessions.length === 0 && <EmptyNote>Belum ada presensi hari ini.</EmptyNote>}
+            {sessions.length === 0 && (
+              <EmptyNote>Belum ada presensi hari ini — daftar akan terisi begitu tim mulai check-in.</EmptyNote>
+            )}
             {sessions.map((s) => (
               <div key={s.id} className="bg-card border border-line rounded-[16px] px-[15px] py-[13px]">
                 <div className="flex items-center gap-3">
@@ -356,22 +418,24 @@ export function AdminPanelScreen() {
           <ListSkeleton />
         ) : (
           <div className="flex flex-col gap-2">
-            <Note tone="warn" icon={Ic.alert}>
-              Hari kerja terjadwal <b>tanpa presensi dan tanpa cuti/dinas disetujui</b> bulan ini —
-              memengaruhi tunjangan kehadiran (Pasal 5 ayat 8).
+            <Note tone="warn" icon={Ic.calendar}>
+              Hari kerja bulan ini tanpa presensi maupun cuti/dinas disetujui. Ada baiknya menyapa
+              karyawannya dulu — daftar ini memengaruhi tunjangan kehadiran (Pasal 5 ayat 8).
             </Note>
-            {absences.length === 0 && <EmptyNote>Tidak ada absen tanpa keterangan bulan ini.</EmptyNote>}
+            {absences.length === 0 && (
+              <EmptyNote>Bulan ini bersih — semua hari kerja tercatat hadir atau berizin. 🎉</EmptyNote>
+            )}
             {absences.map((a, i) => (
               <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] px-[13px] py-[11px]">
-                <span className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
-                  {Ic.alert}
+                <span className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: "var(--warn-soft)", color: "var(--warn)" }}>
+                  {Ic.calendar}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-bold text-ink truncate">{a.userName}</div>
                   <div className="text-[11.5px] text-muted truncate">{a.date} · {a.position}</div>
                 </div>
-                <span className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
-                  Tanpa Ket.
+                <span className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap" style={{ background: "var(--warn-soft)", color: "var(--warn)" }}>
+                  Perlu Dicek
                 </span>
               </div>
             ))}
@@ -381,7 +445,9 @@ export function AdminPanelScreen() {
         <ListSkeleton />
       ) : (
         <div className="flex flex-col gap-2">
-          {pendingReqs.length === 0 && <EmptyNote>Tidak ada pengajuan menunggu.</EmptyNote>}
+          {pendingReqs.length === 0 && (
+            <EmptyNote>Semua pengajuan sudah ditindaklanjuti — tidak ada yang menunggu.</EmptyNote>
+          )}
           {pendingReqs.map((r) => (
             <div key={r.id} className="bg-card border border-line rounded-[16px] px-[15px] py-[13px]">
               <div className="flex items-center gap-3">

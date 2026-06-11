@@ -33,6 +33,8 @@ async function main() {
     CREATE UNIQUE INDEX IF NOT EXISTS attendance_user_date_shift ON attendance (user_id, date, shift);
     UPDATE requests SET leave_type = 'izin' WHERE leave_type = 'darurat';
     UPDATE requests SET leave_type = 'duka_ortu' WHERE leave_type = 'duka';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested_at TIMESTAMPTZ;
   `);
 
   const [admin] = await sql`SELECT id FROM users WHERE email = ${ADMIN_EMAIL.toLowerCase()}`;

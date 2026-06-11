@@ -63,6 +63,8 @@ export interface ApiUser {
   position: Position;
   status: "pending" | "approved" | "rejected";
   leaveBalance: number;
+  mustChangePassword: boolean;
+  resetRequested: boolean;
 }
 
 export interface ApiToday {
@@ -127,6 +129,15 @@ export const api = {
 
   login: (email: string, password: string) =>
     request<{ token: string; user: ApiUser }>("/auth/login", { method: "POST", json: { email, password } }),
+
+  forgotPassword: (email: string) =>
+    request<{ ok: boolean; message: string }>("/auth/forgot", { method: "POST", json: { email } }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      json: { currentPassword, newPassword },
+    }),
 
   me: () =>
     request<{
@@ -212,6 +223,12 @@ export const api = {
     request<{ id: number; status: string }>(`/admin/requests/${id}/decision`, {
       method: "POST",
       json: { decision },
+    }),
+
+  adminResetPassword: (id: number) =>
+    request<{ id: number; tempPassword: string }>(`/admin/users/${id}/reset-password`, {
+      method: "POST",
+      json: {},
     }),
 
   adminSetPosition: (id: number, position: Position) =>
