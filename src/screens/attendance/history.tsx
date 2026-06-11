@@ -3,6 +3,7 @@ import { Sk } from "@/components/ui/skeleton";
 import { TabBar } from "@/components/tab-bar";
 import { Ic } from "@/components/icons";
 import { useApp } from "@/app/store";
+import { statusChip } from "./home";
 
 function HistorySkeleton() {
   return (
@@ -65,26 +66,26 @@ export function HistoryScreen() {
           </div>
           <div className="mb-3 text-[13px] font-extrabold text-ink">Bulan ini</div>
           <div className="flex flex-col gap-2">
-            {log.map((r, i) => (
-              <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] p-[14px]">
-                <span className="w-9 h-9 rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">
-                  {Ic.clock}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-bold text-ink">{r.d}</div>
-                  <div className="text-[11.5px] text-muted tabular-nums">{r.in} – {r.out}</div>
+            {log.map((r, i) => {
+              const chip = statusChip(r);
+              return (
+                <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] p-[14px]">
+                  <span className="w-9 h-9 rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">
+                    {Ic.clock}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-bold text-ink">{r.d}</div>
+                    <div className="text-[11.5px] text-muted tabular-nums">{r.in} – {r.out}</div>
+                  </div>
+                  <span
+                    className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
+                    style={{ background: chip.bg, color: chip.color }}
+                  >
+                    {chip.label}
+                  </span>
                 </div>
-                <span
-                  className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full"
-                  style={{
-                    background: r.late ? "var(--danger-soft)" : "var(--tint2)",
-                    color: r.late ? "var(--danger)" : "var(--primary)",
-                  }}
-                >
-                  {r.late ? "Telat" : "Tepat"}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}

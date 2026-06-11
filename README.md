@@ -34,7 +34,7 @@ npm run build          # type-check (app + server) + production build
 | Check-in flow | `/checkin/locating → ready → face → success` (+ `out-of-range`, `gps-off`) |
 | Check-out flow | `/checkout/*` (same shape, mode-aware) |
 | Requests hub | `/requests` |
-| Cuti (leave) | `/requests/cuti`, `/cuti/sakit`, `/cuti/sent` — dynamic rules per type (tahunan/sakit/darurat/duka) |
+| Cuti (leave) | `/requests/cuti`, `/cuti/sakit`, `/cuti/sent` — all Pasal 5 ayat (5)–(7) reasons (tahunan/sakit/izin/duka/menikah/…) |
 | Dinas (business travel) | `/requests/dinas`, `/dinas/allowance`, `/dinas/sent` — Jabodetabek perimeter logic + allowance calculator |
 | Lembur (overtime) | `/requests/lembur`, `/lembur/sent` — 0.5h stepper, 3h/day & 14h/week caps, 1/173 tariff |
 | History & profile | `/history`, `/profile` |
@@ -97,13 +97,13 @@ the demo employee only with `-- --demo`):
 | Approval polling | `GET /api/auth/signup/:id/status` | demo mode auto-approves after ~4.5 s |
 | Login | `POST /api/auth/login` | → `{ token, user }` (HS256 bearer token, 7 days) |
 | Profile | `GET /api/auth/me` | user + leave balance + today's attendance |
-| Check-in/out | `POST /api/attendance/check-in`, `…/check-out` | body `{ lat?, lng?, force? }`; validates the 50 m geofence, flags late ≥ 08.00, `force: "far" \| "gpsoff"` mirrors the frontend query params |
+| Check-in/out | `POST /api/attendance/check-in`, `…/check-out` | body `{ lat?, lng?, force? }`; validates the 50 m geofence; lateness follows the Pasal 5 schedule per position (Tata Usaha/Sopir/Koster), Senin = libur ("tugas khusus"), Minggu Tata Usaha has two sessions; check-out flags pulang cepat and deducts the 1-hour break after 4 h (except Sopir) |
 | Attendance | `GET /api/attendance/today`, `GET /api/attendance/log` | log backs `/home` and `/history` |
 | Requests | `GET /api/requests` | newest first |
-| Cuti | `POST /api/requests/cuti` | tahunan ≤ saldo; sakit requires `doctorNote`; darurat 1 hari · 1×/bulan · 3×/tahun; duka maks 2 (dalam kota) / 4 (luar Jawa) hari |
+| Cuti | `POST /api/requests/cuti` | Pasal 5 ayat (5)–(7): tahunan ≤ saldo; sakit tanpa surat dokter memotong saldo; izin 1 hari · 1×/bulan · 3×/tahun · dipotong cuti; duka inti 2 hari; duka orangtua/mertua 2/4 (dalam kota/luar Jawa); menikah 2; menikahkan anak 2; baptis/khitan 1; istri melahirkan 1; melahirkan ≤ 90 hari |
 | Dinas | `POST /api/requests/dinas` | Jabodetabek perimeter → no allowance; otherwise server computes transport/makan/akomodasi (75k/150k/350k rates) |
 | Lembur | `POST /api/requests/lembur` | 0.5 h steps; caps 3 h/hari & 14 h/minggu enforced across existing requests |
-| Admin | `GET /api/admin/users`, `POST /api/admin/users/:id/decision`, `GET /api/admin/requests`, `POST /api/admin/requests/:id/decision` | approving a cuti tahunan deducts the leave balance |
+| Admin | `GET /api/admin/users`, `POST /api/admin/users/:id/decision`, `POST /api/admin/users/:id/position`, `GET /api/admin/requests`, `POST /api/admin/requests/:id/decision`, `GET /api/admin/absences?month=` | approving tahunan/izin/sakit-tanpa-surat deducts the balance; `position` assigns the Pasal 5 schedule; `absences` lists scheduled days without attendance or approved leave (ayat 8 — tunjangan) |
 
 All business rules live in `server/rules.ts` (same constants as the frontend screens:
 geofence, leave matrices, dinas rates, lembur caps). Env vars (see `.env.example`):

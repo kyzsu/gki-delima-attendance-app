@@ -3,7 +3,7 @@ import { z } from "zod";
 import { hashPassword, signToken, verifyPassword } from "../auth.js";
 import { sql, type AttendanceRow, type UserRow } from "../db.js";
 import { requireAuth, publicUser } from "../middleware.js";
-import { AUTO_APPROVE_MS, DEMO_MODE, dateStr } from "../rules.js";
+import { AUTO_APPROVE_MS, DEMO_MODE, dateStr, shiftsFor } from "../rules.js";
 
 export const authRouter = Router();
 
@@ -46,13 +46,15 @@ authRouter.get("/signup/:id/status", async (req, res) => {
     res.status(404).json({ error: "Pendaftaran tidak ditemukan." });
     return;
   }
-  if (
-    DEMO_MODE &&
-    user.status === "pending" &&
-    Date.now() - new Date(user.created_at).getTime() >= AUTO_APPROVE_MS
-  ) {
-    await sql`UPDATE users SET status = 'approved' WHERE id = ${user.id}`;
-    user.status = "approved";
+  if (DEMO_MODE && user.status === "pending") {
+    // Compare against the database clock — the app server's clock can drift.
+    const updated = await sql`
+      UPDATE users SET status = 'approved'
+      WHERE id = ${user.id} AND status = 'pending'
+        AND created_at <= now() - make_interval(secs => ${AUTO_APPROVE_MS / 1000})
+      RETURNING id
+    `;
+    if (updated.length > 0) user.status = "approved";
   }
   res.json({ id: user.id, status: user.status });
 });
@@ -85,20 +87,33 @@ authRouter.post("/login", async (req, res) => {
 });
 
 // Profile + today's attendance in one call (backs /home and /profile).
+// `today` is the currently open session (or the last closed one when more
+// shifts remain); `todayDone` says every scheduled session is recorded —
+// on Sunday the Tata Usaha schedule has two.
 authRouter.get("/me", requireAuth, async (req, res) => {
   const user = req.user!;
-  const [today] = await sql<AttendanceRow[]>`
-    SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${dateStr()}
+  const date = dateStr();
+  const sessions = await sql<AttendanceRow[]>`
+    SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${date} ORDER BY shift
   `;
+  const shifts = shiftsFor(user.position, date);
+  const open = sessions.find((s) => !s.check_out);
+  // Off-days allow a single "tugas khusus" session.
+  const required = Math.max(shifts.length, 1);
+  const todayDone = !open && sessions.length >= required;
   res.json({
     user: publicUser(user),
-    today: today
+    today: open
       ? {
-          checkIn: today.check_in,
-          checkOut: today.check_out,
-          late: today.late,
-          distanceM: today.distance_m,
+          checkIn: open.check_in,
+          checkOut: null,
+          shift: open.shift,
+          late: open.late,
+          special: open.special,
+          distanceM: open.distance_m,
         }
       : null,
+    todayDone,
+    remainingShifts: open ? null : Math.max(0, (shifts.length || 1) - sessions.length),
   });
 });

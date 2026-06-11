@@ -7,10 +7,12 @@ import {
   CHURCH,
   DEMO_MODE,
   GEOFENCE_RADIUS_M,
-  LATE_HOUR,
   dateStr,
   haversineM,
-  hourOfDay,
+  minutesOfDay,
+  shiftsFor,
+  toMinutes,
+  workedMinutes,
 } from "../rules.js";
 
 export const attendanceRouter = Router();
@@ -57,6 +59,19 @@ function rejectLocation(res: Response, loc: LocationCheck) {
   return false;
 }
 
+function publicSession(r: AttendanceRow) {
+  return {
+    date: r.date,
+    shift: r.shift,
+    checkIn: r.check_in,
+    checkOut: r.check_out,
+    late: r.late,
+    earlyOut: r.early_out,
+    special: r.special,
+    workedMinutes: r.worked_minutes,
+  };
+}
+
 attendanceRouter.post("/check-in", async (req, res) => {
   const body = locationSchema.safeParse(req.body ?? {});
   if (!body.success) {
@@ -65,24 +80,48 @@ attendanceRouter.post("/check-in", async (req, res) => {
   }
   const user = req.user!;
   const today = dateStr();
-  const [existing] = await sql<AttendanceRow[]>`
-    SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${today}
+  const sessions = await sql<AttendanceRow[]>`
+    SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${today} ORDER BY shift
   `;
-  if (existing) {
-    res.status(409).json({ error: "Sudah check-in hari ini.", checkIn: existing.check_in });
+  const open = sessions.find((s) => !s.check_out);
+  if (open) {
+    res.status(409).json({ error: "Sudah check-in — selesaikan presensi pulang dahulu.", checkIn: open.check_in });
     return;
   }
+
+  // Pasal 5 ayat (1)–(3): the schedule for this employee's position decides
+  // how many sessions today has. Off-days (Senin) are recorded as
+  // "tugas khusus pelayanan gerejawi" — one session, never late.
+  const shifts = shiftsFor(user.position, today);
+  const special = shifts.length === 0;
+  const shiftIdx = sessions.length;
+  if (!special && shiftIdx >= shifts.length) {
+    res.status(409).json({ error: "Semua sesi kerja hari ini sudah tercatat." });
+    return;
+  }
+  if (special && sessions.length > 0) {
+    res.status(409).json({ error: "Presensi tugas khusus hari ini sudah tercatat." });
+    return;
+  }
+
   const loc = checkLocation(body.data);
   if (rejectLocation(res, loc)) return;
   const { distanceM } = loc as Extract<LocationCheck, { kind: "in-range" }>;
 
   const now = new Date();
-  const late = hourOfDay(now) >= LATE_HOUR;
+  const late = special ? false : minutesOfDay(now) > toMinutes(shifts[shiftIdx]!.start);
   await sql`
-    INSERT INTO attendance (user_id, date, check_in, late, distance_m)
-    VALUES (${user.id}, ${today}, ${now}, ${late}, ${distanceM})
+    INSERT INTO attendance (user_id, date, shift, check_in, late, special, distance_m)
+    VALUES (${user.id}, ${today}, ${shiftIdx}, ${now}, ${late}, ${special}, ${distanceM})
   `;
-  res.status(201).json({ checkIn: now.toISOString(), late, distanceM });
+  res.status(201).json({
+    checkIn: now.toISOString(),
+    shift: shiftIdx,
+    shiftStart: special ? null : shifts[shiftIdx]!.start,
+    late,
+    special,
+    distanceM,
+  });
 });
 
 attendanceRouter.post("/check-out", async (req, res) => {
@@ -92,15 +131,14 @@ attendanceRouter.post("/check-out", async (req, res) => {
     return;
   }
   const user = req.user!;
-  const [today] = await sql<AttendanceRow[]>`
-    SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${dateStr()}
+  const today = dateStr();
+  const [open] = await sql<AttendanceRow[]>`
+    SELECT * FROM attendance
+    WHERE user_id = ${user.id} AND date = ${today} AND check_out IS NULL
+    ORDER BY shift DESC LIMIT 1
   `;
-  if (!today) {
+  if (!open) {
     res.status(409).json({ error: "Belum check-in hari ini." });
-    return;
-  }
-  if (today.check_out) {
-    res.status(409).json({ error: "Sudah check-out hari ini.", checkOut: today.check_out });
     return;
   }
   const loc = checkLocation(body.data);
@@ -108,27 +146,52 @@ attendanceRouter.post("/check-out", async (req, res) => {
   const { distanceM } = loc as Extract<LocationCheck, { kind: "in-range" }>;
 
   const now = new Date();
-  await sql`UPDATE attendance SET check_out = ${now}, distance_m = ${distanceM} WHERE id = ${today.id}`;
-  const workedMs = now.getTime() - new Date(today.check_in).getTime();
-  res.json({ checkIn: today.check_in, checkOut: now.toISOString(), workedMs, distanceM });
+  const rawMin = Math.max(0, Math.round((now.getTime() - new Date(open.check_in).getTime()) / 60000));
+  // Pasal 5 ayat (4): 1 hour break after 4 consecutive hours (except Sopir).
+  const netMin = workedMinutes(rawMin, user.position);
+  // Pulang cepat: out before the shift's scheduled end (n/a for tugas khusus).
+  const shifts = shiftsFor(user.position, today);
+  const shiftEnd = open.special ? null : shifts[open.shift]?.end;
+  const earlyOut = shiftEnd ? minutesOfDay(now) < toMinutes(shiftEnd) : false;
+
+  await sql`
+    UPDATE attendance
+    SET check_out = ${now}, early_out = ${earlyOut}, worked_minutes = ${netMin}, distance_m = ${distanceM}
+    WHERE id = ${open.id}
+  `;
+  res.json({
+    checkIn: open.check_in,
+    checkOut: now.toISOString(),
+    shift: open.shift,
+    workedMs: netMin * 60000,
+    breakDeducted: netMin < rawMin,
+    earlyOut,
+    shiftEnd,
+    distanceM,
+  });
 });
 
 attendanceRouter.get("/today", async (req, res) => {
-  const [row] = await sql<AttendanceRow[]>`
-    SELECT * FROM attendance WHERE user_id = ${req.user!.id} AND date = ${dateStr()}
+  const user = req.user!;
+  const today = dateStr();
+  const sessions = await sql<AttendanceRow[]>`
+    SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${today} ORDER BY shift
   `;
-  res.json(
-    row ? { date: row.date, checkIn: row.check_in, checkOut: row.check_out, late: row.late } : null,
-  );
+  const shifts = shiftsFor(user.position, today);
+  res.json({
+    date: today,
+    workday: shifts.length > 0,
+    totalShifts: Math.max(shifts.length, 1),
+    sessions: sessions.map(publicSession),
+  });
 });
 
 // Attendance log for /home and /history, newest first.
 attendanceRouter.get("/log", async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 30, 100);
   const rows = await sql<AttendanceRow[]>`
-    SELECT * FROM attendance WHERE user_id = ${req.user!.id} ORDER BY date DESC LIMIT ${limit}
+    SELECT * FROM attendance WHERE user_id = ${req.user!.id}
+    ORDER BY date DESC, shift DESC LIMIT ${limit}
   `;
-  res.json(
-    rows.map((r) => ({ date: r.date, checkIn: r.check_in, checkOut: r.check_out, late: r.late })),
-  );
+  res.json(rows.map(publicSession));
 });

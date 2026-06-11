@@ -4,7 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Sk } from "@/components/ui/skeleton";
 import { TabBar } from "@/components/tab-bar";
 import { Ic } from "@/components/icons";
-import { useApp, fmtDateLong, fmtTime, fmtDuration, greeting } from "@/app/store";
+import { useApp, fmtDateLong, fmtTime, fmtDuration, greeting, type LogEntry } from "@/app/store";
+
+export function statusChip(r: Pick<LogEntry, "late" | "earlyOut" | "special">) {
+  if (r.special) return { label: "Khusus", bg: "var(--tint)", color: "var(--muted)" };
+  if (r.late) return { label: "Telat", bg: "var(--danger-soft)", color: "var(--danger)" };
+  if (r.earlyOut) return { label: "Pulang Cepat", bg: "var(--warn-soft)", color: "var(--warn)" };
+  return { label: "Tepat", bg: "var(--tint2)", color: "var(--primary)" };
+}
 
 function useClock(intervalMs = 1000) {
   const [now, setNow] = React.useState(() => new Date());
@@ -15,26 +22,26 @@ function useClock(intervalMs = 1000) {
   return now;
 }
 
-function LogList({ items }: { items: { d: string; in: string; out: string; late?: boolean }[] }) {
+function LogList({ items }: { items: LogEntry[] }) {
   return (
     <div className="flex flex-col gap-2">
-      {items.map((r, i) => (
-        <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] px-[14px] py-3">
-          <div className="flex-1 text-[13.5px] font-bold text-ink">{r.d}</div>
-          <div className="text-[12.5px] text-muted font-semibold tabular-nums">
-            {r.in} – {r.out}
+      {items.map((r, i) => {
+        const chip = statusChip(r);
+        return (
+          <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] px-[14px] py-3">
+            <div className="flex-1 text-[13.5px] font-bold text-ink">{r.d}</div>
+            <div className="text-[12.5px] text-muted font-semibold tabular-nums">
+              {r.in} – {r.out}
+            </div>
+            <span
+              className="text-[11px] font-bold px-[9px] py-[3px] rounded-full whitespace-nowrap"
+              style={{ background: chip.bg, color: chip.color }}
+            >
+              {chip.label}
+            </span>
           </div>
-          <span
-            className="text-[11px] font-bold px-[9px] py-[3px] rounded-full"
-            style={{
-              background: r.late ? "var(--danger-soft)" : "var(--tint2)",
-              color: r.late ? "var(--danger)" : "var(--primary)",
-            }}
-          >
-            {r.late ? "Telat" : "Tepat"}
-          </span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

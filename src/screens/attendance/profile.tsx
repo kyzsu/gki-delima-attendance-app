@@ -5,6 +5,12 @@ import { TabBar } from "@/components/tab-bar";
 import { Ic } from "@/components/icons";
 import { useApp, CHURCH } from "@/app/store";
 
+export const POSITION_LABEL = {
+  tata_usaha: "Tata Usaha",
+  sopir: "Sopir",
+  koster: "Koster & Pembantu Koster",
+} as const;
+
 export function ProfileScreen() {
   const navigate = useNavigate();
   const { user, leaveBalance, logout } = useApp();
@@ -24,6 +30,7 @@ export function ProfileScreen() {
 
       <SummaryCard>
         <Row k="Unit kerja" v={CHURCH.name} />
+        <Row k="Posisi" v={POSITION_LABEL[user.position]} />
         <Row k="Saldo cuti tahunan" v={`${leaveBalance} hari`} />
         <Row k="Status akun" v="Aktif" last />
       </SummaryCard>
