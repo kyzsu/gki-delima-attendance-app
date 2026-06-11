@@ -186,12 +186,22 @@ attendanceRouter.get("/today", async (req, res) => {
   });
 });
 
-// Attendance log for /home and /history, newest first.
+// Attendance log, newest first. Default: recent sessions (home screen);
+// ?month=YYYY-MM returns that whole month (history screen).
 attendanceRouter.get("/log", async (req, res) => {
-  const limit = Math.min(Number(req.query.limit) || 30, 100);
-  const rows = await sql<AttendanceRow[]>`
-    SELECT * FROM attendance WHERE user_id = ${req.user!.id}
-    ORDER BY date DESC, shift DESC LIMIT ${limit}
-  `;
+  const month =
+    typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month)
+      ? req.query.month
+      : null;
+  const rows = month
+    ? await sql<AttendanceRow[]>`
+        SELECT * FROM attendance WHERE user_id = ${req.user!.id}
+          AND date LIKE ${month + "%"}
+        ORDER BY date DESC, shift DESC
+      `
+    : await sql<AttendanceRow[]>`
+        SELECT * FROM attendance WHERE user_id = ${req.user!.id}
+        ORDER BY date DESC, shift DESC LIMIT ${Math.min(Number(req.query.limit) || 30, 100)}
+      `;
   res.json(rows.map(publicSession));
 });
