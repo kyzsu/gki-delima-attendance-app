@@ -5,10 +5,45 @@ import { Seg } from "@/components/ui/segmented";
 import { Note } from "@/components/ui/note";
 import { Sk } from "@/components/ui/skeleton";
 import { Ic, RIc } from "@/components/icons";
-import { useApp } from "@/app/store";
-import { api, type AdminRequest, type ApiAbsence, type ApiUser, type Position } from "@/lib/api";
+import { useApp, fmtTime } from "@/app/store";
+import { statusChip } from "@/screens/attendance/home";
+import {
+  api,
+  getToken,
+  photoUrl,
+  type AdminRequest,
+  type AdminSession,
+  type ApiAbsence,
+  type ApiUser,
+  type Position,
+} from "@/lib/api";
 
-type Tab = "users" | "requests" | "absences";
+type Tab = "users" | "requests" | "absences" | "attendance";
+
+/** The selfie endpoint needs the Authorization header, which <img> can't
+ *  send — fetch as a blob and display via an object URL. */
+function AuthImg({ src, alt }: { src: string; alt: string }) {
+  const [url, setUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    let obj: string | null = null;
+    fetch(src, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((b) => {
+        if (b && alive) {
+          obj = URL.createObjectURL(b);
+          setUrl(obj);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      if (obj) URL.revokeObjectURL(obj);
+    };
+  }, [src]);
+  if (!url) return <div className="w-12 h-12 rounded-[10px] bg-tint shrink-0" />;
+  return <img src={url} alt={alt} className="w-12 h-12 rounded-[10px] object-cover shrink-0" />;
+}
 
 const POSITIONS: { v: Position; label: string }[] = [
   { v: "tata_usaha", label: "Tata Usaha" },
@@ -99,20 +134,23 @@ export function AdminPanelScreen() {
   const [users, setUsers] = React.useState<ApiUser[] | null>(null);
   const [requests, setRequests] = React.useState<AdminRequest[] | null>(null);
   const [absences, setAbsences] = React.useState<ApiAbsence[] | null>(null);
+  const [sessions, setSessions] = React.useState<AdminSession[] | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setError(null);
     try {
-      const [u, r, a] = await Promise.all([
+      const [u, r, a, att] = await Promise.all([
         api.adminUsers(),
         api.adminRequests(),
         api.adminAbsences(),
+        api.adminAttendance(),
       ]);
       setUsers(u);
       setRequests(r);
       setAbsences(a.absences);
+      setSessions(att.sessions);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
     }
@@ -177,9 +215,10 @@ export function AdminPanelScreen() {
           value={tab}
           onChange={setTab}
           options={[
-            { v: "users", label: `Pendaftar (${pendingUsers.length})` },
-            { v: "requests", label: `Pengajuan (${pendingReqs.length})` },
+            { v: "users", label: `Akun (${pendingUsers.length})` },
+            { v: "requests", label: `Ajuan (${pendingReqs.length})` },
             { v: "absences", label: `Absen (${absences?.length ?? 0})` },
+            { v: "attendance", label: `Presensi (${sessions?.length ?? 0})` },
           ]}
         />
       </div>
@@ -252,6 +291,64 @@ export function AdminPanelScreen() {
                 </div>
               </>
             )}
+          </div>
+        )
+      ) : tab === "attendance" ? (
+        sessions === null ? (
+          <ListSkeleton />
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Note tone="info" icon={Ic.camera}>
+              Presensi hari ini dengan <b>foto selfie</b> dan jarak GPS saat check-in/out.
+            </Note>
+            {sessions.length === 0 && <EmptyNote>Belum ada presensi hari ini.</EmptyNote>}
+            {sessions.map((s) => (
+              <div key={s.id} className="bg-card border border-line rounded-[16px] px-[15px] py-[13px]">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13.5px] font-extrabold text-ink truncate">
+                      {s.userName}
+                      {s.shift > 0 ? " · Sesi 2" : ""}
+                    </div>
+                    <div className="text-[11.5px] text-muted">
+                      {fmtTime(new Date(s.checkIn))} – {s.checkOut ? fmtTime(new Date(s.checkOut)) : "—"}
+                      {s.distanceM !== null ? ` · ±${s.distanceM} m` : ""}
+                    </div>
+                  </div>
+                  {(() => {
+                    const chip = statusChip(s);
+                    return (
+                      <span
+                        className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
+                        style={{ background: chip.bg, color: chip.color }}
+                      >
+                        {chip.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <div className="flex-1 flex items-center gap-2">
+                    {s.photoIn ? (
+                      <AuthImg src={photoUrl(s.id, "in")} alt={`Masuk ${s.userName}`} />
+                    ) : (
+                      <div className="w-12 h-12 rounded-[10px] bg-tint flex items-center justify-center text-muted shrink-0">{Ic.camera}</div>
+                    )}
+                    <span className="text-[11px] text-muted font-semibold">Masuk{s.late ? " · Telat" : ""}</span>
+                  </div>
+                  <div className="flex-1 flex items-center gap-2">
+                    {s.photoOut ? (
+                      <AuthImg src={photoUrl(s.id, "out")} alt={`Pulang ${s.userName}`} />
+                    ) : (
+                      <div className="w-12 h-12 rounded-[10px] bg-tint flex items-center justify-center text-muted shrink-0">{Ic.camera}</div>
+                    )}
+                    <span className="text-[11px] text-muted font-semibold">
+                      {s.checkOut ? `Pulang${s.earlyOut ? " · Cepat" : ""}` : "Belum pulang"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )
       ) : tab === "absences" ? (

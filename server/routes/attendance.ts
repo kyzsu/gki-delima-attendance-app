@@ -2,7 +2,8 @@ import { Router } from "express";
 import type { Response } from "express";
 import { z } from "zod";
 import { sql, type AttendanceRow } from "../db.js";
-import { requireEmployee } from "../middleware.js";
+import { requireAuth, requireEmployee } from "../middleware.js";
+import { decodeDataUrl, loadPhoto, savePhoto } from "../photos.js";
 import {
   CHURCH,
   DEMO_MODE,
@@ -23,6 +24,8 @@ const locationSchema = z.object({
   lng: z.number().min(-180).max(180).optional(),
   // Demo-only testing hook, mirroring the frontend's ?force= params.
   force: z.enum(["far", "gpsoff"]).optional(),
+  // Selfie captured by the face-scan screen (JPEG data URL).
+  photo: z.string().max(3_000_000).optional(),
 });
 
 type LocationCheck =
@@ -110,10 +113,13 @@ attendanceRouter.post("/check-in", async (req, res) => {
 
   const now = new Date();
   const late = special ? false : minutesOfDay(now) > toMinutes(shifts[shiftIdx]!.start);
-  await sql`
+  const [created] = await sql<{ id: number }[]>`
     INSERT INTO attendance (user_id, date, shift, check_in, late, special, distance_m)
     VALUES (${user.id}, ${today}, ${shiftIdx}, ${now}, ${late}, ${special}, ${distanceM})
+    RETURNING id
   `;
+  const photo = body.data.photo ? decodeDataUrl(body.data.photo) : null;
+  if (photo) await savePhoto(created!.id, "in", photo.mime, photo.data);
   res.status(201).json({
     checkIn: now.toISOString(),
     shift: shiftIdx,
@@ -121,6 +127,7 @@ attendanceRouter.post("/check-in", async (req, res) => {
     late,
     special,
     distanceM,
+    photo: !!photo,
   });
 });
 
@@ -159,6 +166,8 @@ attendanceRouter.post("/check-out", async (req, res) => {
     SET check_out = ${now}, early_out = ${earlyOut}, worked_minutes = ${netMin}, distance_m = ${distanceM}
     WHERE id = ${open.id}
   `;
+  const photo = body.data.photo ? decodeDataUrl(body.data.photo) : null;
+  if (photo) await savePhoto(open.id, "out", photo.mime, photo.data);
   res.json({
     checkIn: open.check_in,
     checkOut: now.toISOString(),
@@ -168,6 +177,7 @@ attendanceRouter.post("/check-out", async (req, res) => {
     earlyOut,
     shiftEnd,
     distanceM,
+    photo: !!photo,
   });
 });
 
@@ -184,6 +194,28 @@ attendanceRouter.get("/today", async (req, res) => {
     totalShifts: Math.max(shifts.length, 1),
     sessions: sessions.map(publicSession),
   });
+});
+
+// Selfie retrieval — the owner or an admin. Mounted at /api/photos.
+export const photosRouter = Router();
+photosRouter.get("/:attendanceId/:kind", requireAuth, async (req, res) => {
+  const kind = req.params.kind;
+  if (kind !== "in" && kind !== "out") {
+    res.status(404).json({ error: "Foto tidak ditemukan." });
+    return;
+  }
+  const row = await loadPhoto(Number(req.params.attendanceId) || 0, kind);
+  if (!row) {
+    res.status(404).json({ error: "Foto tidak ditemukan." });
+    return;
+  }
+  if (req.user!.role !== "admin" && req.user!.id !== row.user_id) {
+    res.status(403).json({ error: "Bukan presensi Anda." });
+    return;
+  }
+  // Photos never change once stored.
+  res.setHeader("Cache-Control", "private, max-age=86400, immutable");
+  res.type(row.mime).send(row.data);
 });
 
 // Attendance log, newest first. Default: recent sessions (home screen);

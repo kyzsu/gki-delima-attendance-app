@@ -5,6 +5,29 @@ import { Ic } from "@/components/icons";
 import { useApp } from "@/app/store";
 import { ApiError } from "@/lib/api";
 
+/** Waits for the camera stream, then grabs a downscaled JPEG frame.
+ *  Returns null when no camera is available (the record is still created —
+ *  the selfie is evidence, not a gate). */
+async function captureFrame(video: HTMLVideoElement | null): Promise<string | null> {
+  if (!video) return null;
+  for (let i = 0; i < 10 && (video.readyState < 2 || !video.videoWidth); i++) {
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (video.readyState < 2 || !video.videoWidth) return null;
+  const w = 480;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = Math.round((video.videoHeight / video.videoWidth) * w);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  try {
+    return canvas.toDataURL("image/jpeg", 0.7);
+  } catch {
+    return null;
+  }
+}
+
 /** Face verification — uses the front camera when available, falls back to a placeholder. */
 export function FaceScanScreen({ mode }: { mode: "in" | "out" }) {
   const navigate = useNavigate();
@@ -35,13 +58,16 @@ export function FaceScanScreen({ mode }: { mode: "in" | "out" }) {
     };
   }, []);
 
-  // The face match itself is simulated; the attendance API call is real.
-  // Both the scan animation and the request must finish before navigating.
+  // The face match itself is simulated; the attendance API call is real and
+  // carries a captured selfie when the camera is available. Both the scan
+  // animation and the request must finish before navigating.
   React.useEffect(() => {
     let alive = true;
     const base = mode === "in" ? "/checkin" : "/checkout";
     const animation = new Promise((r) => setTimeout(r, 3200));
-    const record = mode === "in" ? checkIn() : checkOut();
+    const record = captureFrame(videoRef.current).then((photo) =>
+      mode === "in" ? checkIn(photo) : checkOut(photo),
+    );
 
     Promise.all([record, animation])
       .then(() => {

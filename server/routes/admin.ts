@@ -81,6 +81,40 @@ adminRouter.get("/requests", async (req, res) => {
   );
 });
 
+// Day view of attendance sessions with selfie availability (?date=YYYY-MM-DD,
+// default today church-local).
+adminRouter.get("/attendance", async (req, res) => {
+  const date =
+    typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+      ? req.query.date
+      : dateStr();
+  type Row = AttendanceRow & { user_name: string; has_in: boolean; has_out: boolean };
+  const rows = await sql<Row[]>`
+    SELECT a.*, u.name AS user_name,
+      EXISTS (SELECT 1 FROM attendance_photos p WHERE p.attendance_id = a.id AND p.kind = 'in')  AS has_in,
+      EXISTS (SELECT 1 FROM attendance_photos p WHERE p.attendance_id = a.id AND p.kind = 'out') AS has_out
+    FROM attendance a JOIN users u ON u.id = a.user_id
+    WHERE a.date = ${date}
+    ORDER BY a.check_in
+  `;
+  res.json({
+    date,
+    sessions: rows.map((r) => ({
+      id: r.id,
+      userName: r.user_name,
+      shift: r.shift,
+      checkIn: r.check_in,
+      checkOut: r.check_out,
+      late: r.late,
+      earlyOut: r.early_out,
+      special: r.special,
+      distanceM: r.distance_m,
+      photoIn: r.has_in,
+      photoOut: r.has_out,
+    })),
+  });
+});
+
 // ── Absence ledger — Pasal 5 ayat (8) ────────────────────────────
 // Scheduled working days with no attendance and no approved cuti/dinas
 // covering them. These cost the attendance-variable tunjangan.

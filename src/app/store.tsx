@@ -55,7 +55,23 @@ export async function checkLocation(force?: string | null): Promise<LocationResu
   if (force === "far") return { kind: "out-of-range", distanceM: 1200 };
   if (force === "gpsoff") return { kind: "gps-off" };
   const cfg = await getConfig();
-  if (cfg.demoMode) return { kind: "in-range", distanceM: 18 };
+
+  // Demo mode never *rejects*, but it still measures: real coordinates are
+  // captured and recorded when GPS is available, so distances are honest.
+  if (cfg.demoMode) {
+    if (!("geolocation" in navigator)) return { kind: "in-range", distanceM: 18 };
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          const d = Math.round(haversineM(lat, lng, cfg.church.lat, cfg.church.lng));
+          resolve({ kind: "in-range", distanceM: d, lat, lng });
+        },
+        () => resolve({ kind: "in-range", distanceM: 18 }),
+        { enableHighAccuracy: true, timeout: 5000 },
+      );
+    });
+  }
 
   if (!("geolocation" in navigator)) return { kind: "gps-off" };
   return new Promise((resolve) => {
@@ -142,8 +158,8 @@ interface AppState {
 
   login: (email: string, password: string) => Promise<ApiUser>;
   logout: () => void;
-  checkIn: () => Promise<void>;
-  checkOut: () => Promise<void>;
+  checkIn: (photo?: string | null) => Promise<void>;
+  checkOut: (photo?: string | null) => Promise<void>;
   refresh: () => Promise<void>;
   submitCuti: typeof api.submitCuti;
   submitDinas: typeof api.submitDinas;
@@ -281,8 +297,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setLog([]);
       setRequests([]);
     },
-    checkIn: async () => {
-      const res = await api.checkIn(pendingLoc.current);
+    checkIn: async (photo) => {
+      const res = await api.checkIn({ ...pendingLoc.current, photo: photo ?? undefined });
       setToday({
         checkIn: res.checkIn,
         checkOut: null,
@@ -295,8 +311,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setLastDistanceM(res.distanceM);
       setLog((await api.attendanceLog()).map(toLogEntry));
     },
-    checkOut: async () => {
-      const res = await api.checkOut(pendingLoc.current);
+    checkOut: async (photo) => {
+      const res = await api.checkOut({ ...pendingLoc.current, photo: photo ?? undefined });
       // Keep the closed session locally for the success screen; /me says
       // whether more shifts remain today (Sunday split shift).
       setToday((t) => (t ? { ...t, checkOut: res.checkOut } : t));
