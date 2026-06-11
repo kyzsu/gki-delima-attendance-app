@@ -24,12 +24,23 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
+// Caching policy: API responses are per-user and refetched after every
+// mutation, so default to private/no-cache; /api/config is static per
+// deployment and overrides with a public CDN cache below.
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-cache");
+  next();
+});
+
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, demoMode: DEMO_MODE });
 });
 
 // Public geofence config so the frontend doesn't hardcode coordinates.
+// s-maxage lets Vercel's CDN serve this without invoking the function;
+// stale-while-revalidate keeps it instant when the cache expires.
 app.get("/api/config", (_req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400");
   res.json({ church: CHURCH, geofenceRadiusM: GEOFENCE_RADIUS_M, demoMode: DEMO_MODE });
 });
 

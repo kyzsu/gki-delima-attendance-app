@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { sql, type RequestRow, type UserRow } from "../db.js";
-import { requireEmployee } from "../middleware.js";
+import { invalidateUser, requireEmployee } from "../middleware.js";
 import {
   DINAS_DESTINATIONS,
   DINAS_MAX_NIGHTS,
@@ -305,5 +305,6 @@ export async function approveRequest(r: RequestRow) {
       UPDATE users SET leave_balance = GREATEST(0, ${user!.leave_balance - r.days})
       WHERE id = ${r.user_id}
     `;
+    invalidateUser(r.user_id);
   }
 }

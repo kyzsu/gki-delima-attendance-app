@@ -53,6 +53,10 @@ function Tile({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Past months never change — cache them for the session so stepping back
+// and forth is instant. The current month always refetches.
+const monthCache = new Map<string, ApiLogEntry[]>();
+
 export function HistoryScreen() {
   const currentMonth = ym(new Date());
   const [month, setMonth] = React.useState(currentMonth);
@@ -60,9 +64,10 @@ export function HistoryScreen() {
 
   React.useEffect(() => {
     let alive = true;
-    api
-      .attendanceLog(month)
+    const cached = month < currentMonth ? monthCache.get(month) : undefined;
+    (cached ? Promise.resolve(cached) : api.attendanceLog(month))
       .then((rows) => {
+        if (!cached && month < currentMonth) monthCache.set(month, rows);
         if (alive) setData({ month, rows });
       })
       .catch(() => {
@@ -71,7 +76,7 @@ export function HistoryScreen() {
     return () => {
       alive = false;
     };
-  }, [month]);
+  }, [month, currentMonth]);
 
   const loading = data?.month !== month;
   const rows = data?.rows ?? [];
