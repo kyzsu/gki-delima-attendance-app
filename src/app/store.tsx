@@ -17,9 +17,9 @@ import {
 // (set GKI_DEMO_MODE=false on the server to require real GPS).
 export const CHURCH = {
   name: "GKI Delima",
-  address: "GKI Delima · Jl. Delima Raya No. 1",
-  lat: -6.1944,
-  lng: 106.7892,
+  address: "Jl. Delima IV No.5, RT.17/RW.5, Tj. Duren Sel., Kec. Grogol petamburan, Kota Jakarta Barat, Daerah Khusus Ibukota Jakarta 11470",
+  lat: -6.174782661694437,
+  lng: 106.78442308306923,
 };
 export const GEOFENCE_RADIUS_M = 50;
 
