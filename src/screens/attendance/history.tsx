@@ -1,14 +1,27 @@
 import * as React from "react";
+import { Button } from "@/components/ui/button";
 import { Sk } from "@/components/ui/skeleton";
 import { TabBar } from "@/components/tab-bar";
-import { Ic } from "@/components/icons";
-import { useApp } from "@/app/store";
+import { Ic, RIc } from "@/components/icons";
+import { toLogEntry } from "@/app/store";
+import { api, type ApiLogEntry } from "@/lib/api";
 import { statusChip } from "./home";
+
+const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+function shiftMonth(month: string, delta: number) {
+  const [y, m] = month.split("-").map(Number);
+  return ym(new Date(y!, m! - 1 + delta, 1));
+}
+
+function monthLabel(month: string) {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y!, m! - 1, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+}
 
 function HistorySkeleton() {
   return (
     <>
-      <Sk w={150} h={22} r={8} style={{ marginBottom: 18 }} />
       <div className="flex gap-[10px] mb-[18px]">
         <Sk w="100%" h={72} r={16} style={{ flex: 1 }} />
         <Sk w="100%" h={72} r={16} style={{ flex: 1 }} />
@@ -41,52 +54,92 @@ function Tile({ label, value }: { label: string; value: string }) {
 }
 
 export function HistoryScreen() {
-  const { ready, log } = useApp();
-  const [delayDone, setDelayDone] = React.useState(false);
-  React.useEffect(() => {
-    const t = setTimeout(() => setDelayDone(true), 900);
-    return () => clearTimeout(t);
-  }, []);
-  const loading = !ready || !delayDone;
+  const currentMonth = ym(new Date());
+  const [month, setMonth] = React.useState(currentMonth);
+  const [data, setData] = React.useState<{ month: string; rows: ApiLogEntry[] } | null>(null);
 
-  const onTime = log.filter((l) => !l.late).length;
-  const late = log.length - onTime;
+  React.useEffect(() => {
+    let alive = true;
+    api
+      .attendanceLog(month)
+      .then((rows) => {
+        if (alive) setData({ month, rows });
+      })
+      .catch(() => {
+        if (alive) setData({ month, rows: [] });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [month]);
+
+  const loading = data?.month !== month;
+  const rows = data?.rows ?? [];
+  // One day can hold two sessions (Sunday split shift) — count days attended.
+  const daysPresent = new Set(rows.map((r) => r.date)).size;
+  const late = rows.filter((r) => r.late).length;
+  const onTime = rows.length - late;
 
   return (
     <div className="flex flex-col flex-1 relative bg-bg px-6 pt-[58px] pb-[100px]">
+      <h1 className="text-[24px] font-extrabold text-ink mb-[14px] tracking-[-0.4px]">Riwayat</h1>
+
+      {/* month stepper — browse any past month */}
+      <div className="flex items-center gap-2 mb-[18px]">
+        <Button variant="back" aria-label="Bulan sebelumnya" onClick={() => setMonth(shiftMonth(month, -1))}>
+          {Ic.chevL}
+        </Button>
+        <div className="flex-1 text-center text-[15px] font-extrabold text-ink">{monthLabel(month)}</div>
+        <Button
+          variant="back"
+          aria-label="Bulan berikutnya"
+          disabled={month >= currentMonth}
+          className="disabled:opacity-40"
+          onClick={() => setMonth(shiftMonth(month, 1))}
+        >
+          <span className="flex">{RIc.chevR}</span>
+        </Button>
+      </div>
+
       {loading ? (
         <HistorySkeleton />
       ) : (
         <>
-          <h1 className="text-[24px] font-extrabold text-ink mb-[18px] tracking-[-0.4px]">Riwayat</h1>
           <div className="flex gap-[10px] mb-[18px]">
-            <Tile label="Hadir" value={String(log.length)} />
+            <Tile label="Hadir" value={String(daysPresent)} />
             <Tile label="Tepat waktu" value={String(onTime)} />
             <Tile label="Telat" value={String(late)} />
           </div>
-          <div className="mb-3 text-[13px] font-extrabold text-ink">Bulan ini</div>
-          <div className="flex flex-col gap-2">
-            {log.map((r, i) => {
-              const chip = statusChip(r);
-              return (
-                <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] p-[14px]">
-                  <span className="w-9 h-9 rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">
-                    {Ic.clock}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-bold text-ink">{r.d}</div>
-                    <div className="text-[11.5px] text-muted tabular-nums">{r.in} – {r.out}</div>
+          <div className="mb-3 text-[13px] font-extrabold text-ink">Sesi presensi</div>
+          {rows.length === 0 ? (
+            <div className="text-center text-[13px] text-muted font-semibold bg-tint rounded-[14px] px-4 py-5">
+              Tidak ada presensi pada {monthLabel(month)}.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {rows.map((raw, i) => {
+                const r = toLogEntry(raw);
+                const chip = statusChip(r);
+                return (
+                  <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] p-[14px]">
+                    <span className="w-9 h-9 rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">
+                      {Ic.clock}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-bold text-ink">{r.d}</div>
+                      <div className="text-[11.5px] text-muted tabular-nums">{r.in} – {r.out}</div>
+                    </div>
+                    <span
+                      className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
+                      style={{ background: chip.bg, color: chip.color }}
+                    >
+                      {chip.label}
+                    </span>
                   </div>
-                  <span
-                    className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
-                    style={{ background: chip.bg, color: chip.color }}
-                  >
-                    {chip.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
       <TabBar />

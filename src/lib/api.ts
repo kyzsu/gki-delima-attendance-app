@@ -158,7 +158,8 @@ export const api = {
       distanceM: number;
     }>("/attendance/check-out", { method: "POST", json: loc }),
 
-  attendanceLog: () => request<ApiLogEntry[]>("/attendance/log"),
+  attendanceLog: (month?: string) =>
+    request<ApiLogEntry[]>(`/attendance/log${month ? `?month=${month}` : ""}`),
 
   requests: () => request<ApiRequest[]>("/requests"),
 

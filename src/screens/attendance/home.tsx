@@ -102,7 +102,10 @@ export function HomeScreen() {
           <div className="text-[12.5px] text-muted font-semibold">{greeting(now)}</div>
           <div className="text-[16.5px] font-extrabold text-ink tracking-[-0.2px]">{user.name}</div>
         </div>
-        <Button variant="back" aria-label="Kalender">{Ic.calendar}</Button>
+        {/* Opens the month-by-month attendance history. */}
+        <Button variant="back" aria-label="Riwayat presensi" onClick={() => navigate("/history")}>
+          {Ic.calendar}
+        </Button>
       </div>
 
       {/* hero status card */}

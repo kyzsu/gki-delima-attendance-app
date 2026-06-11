@@ -170,7 +170,7 @@ function logLabel(date: string) {
   return fmtDateShort(new Date(date + "T00:00:00"));
 }
 
-function toLogEntry(e: {
+export function toLogEntry(e: {
   date: string;
   shift: number;
   checkIn: string;
