@@ -1,13 +1,14 @@
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import { authRouter } from "./routes/auth.js";
-import { attendanceRouter } from "./routes/attendance.js";
+import { attendanceRouter, photosRouter } from "./routes/attendance.js";
 import { requestsRouter } from "./routes/requests.js";
 import { adminRouter } from "./routes/admin.js";
 import { CHURCH, DEMO_MODE, GEOFENCE_RADIUS_M } from "./rules.js";
 
 export const app = express();
-app.use(express.json());
+// Check-in/out selfies arrive as ~100–300 KB base64 data URLs.
+app.use(express.json({ limit: "3mb" }));
 
 // Dev-only CORS — in production the SPA and the API share an origin
 // (Vercel serves both), so cross-origin headers are unnecessary.
@@ -46,6 +47,7 @@ app.get("/api/config", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/attendance", attendanceRouter);
+app.use("/api/photos", photosRouter);
 app.use("/api/requests", requestsRouter);
 app.use("/api/admin", adminRouter);
 

@@ -54,6 +54,18 @@ CREATE TABLE IF NOT EXISTS requests (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Check-in/out selfies, stored in Postgres (small org — ~70 KB JPEG per
+-- session; swap server/photos.ts for Supabase Storage if volume grows).
+CREATE TABLE IF NOT EXISTS attendance_photos (
+  id            INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  attendance_id INT NOT NULL REFERENCES attendance(id),
+  kind          TEXT NOT NULL CHECK (kind IN ('in', 'out')),
+  mime          TEXT NOT NULL DEFAULT 'image/jpeg',
+  data          BYTEA NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (attendance_id, kind)
+);
+
 CREATE INDEX IF NOT EXISTS attendance_user_date ON attendance (user_id, date DESC);
 CREATE INDEX IF NOT EXISTS requests_user_id ON requests (user_id, id DESC);
 CREATE INDEX IF NOT EXISTS requests_lembur_caps ON requests (user_id, kind, start_date);

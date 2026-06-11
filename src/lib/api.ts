@@ -136,7 +136,7 @@ export const api = {
       remainingShifts: number | null;
     }>("/auth/me"),
 
-  checkIn: (loc: Coords) =>
+  checkIn: (loc: Coords & { photo?: string }) =>
     request<{
       checkIn: string;
       shift: number;
@@ -144,9 +144,10 @@ export const api = {
       late: boolean;
       special: boolean;
       distanceM: number;
+      photo: boolean;
     }>("/attendance/check-in", { method: "POST", json: loc }),
 
-  checkOut: (loc: Coords) =>
+  checkOut: (loc: Coords & { photo?: string }) =>
     request<{
       checkIn: string;
       checkOut: string;
@@ -156,6 +157,7 @@ export const api = {
       earlyOut: boolean;
       shiftEnd: string | null;
       distanceM: number;
+      photo: boolean;
     }>("/attendance/check-out", { method: "POST", json: loc }),
 
   attendanceLog: (month?: string) =>
@@ -222,4 +224,27 @@ export const api = {
     request<{ month: string; from: string; to: string; absences: ApiAbsence[] }>(
       `/admin/absences${month ? `?month=${month}` : ""}`,
     ),
+
+  adminAttendance: (date?: string) =>
+    request<{ date: string; sessions: AdminSession[] }>(
+      `/admin/attendance${date ? `?date=${date}` : ""}`,
+    ),
 };
+
+export interface AdminSession {
+  id: number;
+  userName: string;
+  shift: number;
+  checkIn: string;
+  checkOut: string | null;
+  late: boolean;
+  earlyOut: boolean;
+  special: boolean;
+  distanceM: number | null;
+  photoIn: boolean;
+  photoOut: boolean;
+}
+
+/** Selfie endpoint (requires the Authorization header — fetch as a blob). */
+export const photoUrl = (attendanceId: number, kind: "in" | "out") =>
+  `/api/photos/${attendanceId}/${kind}`;
