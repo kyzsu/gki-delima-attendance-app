@@ -1,9 +1,11 @@
 import * as React from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { Seg } from "@/components/ui/segmented";
 import { Note } from "@/components/ui/note";
 import { Sk } from "@/components/ui/skeleton";
-import { ScreenHead } from "@/components/screen-head";
 import { Ic, RIc } from "@/components/icons";
+import { useApp } from "@/app/store";
 import { api, type AdminRequest, type ApiAbsence, type ApiUser, type Position } from "@/lib/api";
 
 type Tab = "users" | "requests" | "absences";
@@ -91,6 +93,8 @@ function ListSkeleton() {
 }
 
 export function AdminPanelScreen() {
+  const navigate = useNavigate();
+  const { user, logout } = useApp();
   const [tab, setTab] = React.useState<Tab>("users");
   const [users, setUsers] = React.useState<ApiUser[] | null>(null);
   const [requests, setRequests] = React.useState<AdminRequest[] | null>(null);
@@ -139,13 +143,34 @@ export function AdminPanelScreen() {
   const decidedReqs = requests?.filter((r) => r.status !== "Menunggu") ?? [];
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
-      <ScreenHead
-        title="Panel Admin"
-        sub="Persetujuan pendaftaran & pengajuan karyawan."
-        close
-        to="/home"
-      />
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-[60px] pb-10">
+      {/* The admin's homepage — identity header with logout, no employee nav. */}
+      <div className="flex items-center gap-3 mb-[22px]">
+        <div
+          className="w-[46px] h-[46px] rounded-full text-white flex items-center justify-center font-extrabold text-[17px] shrink-0"
+          style={{ background: "var(--grad)" }}
+        >
+          {user.initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[12.5px] text-muted font-semibold">Koordinator Personalia</div>
+          <div className="text-[16.5px] font-extrabold text-ink tracking-[-0.2px] truncate">{user.name}</div>
+        </div>
+        <Button
+          variant="back"
+          aria-label="Keluar"
+          onClick={() => {
+            logout();
+            navigate("/");
+          }}
+        >
+          {Ic.logout}
+        </Button>
+      </div>
+      <h1 className="text-[24px] font-extrabold text-ink tracking-[-0.4px] mb-[2px]">Panel Admin</h1>
+      <p className="text-[13.5px] text-muted mb-[18px] leading-[1.45]">
+        Persetujuan pendaftaran & pengajuan karyawan.
+      </p>
 
       <div className="mb-4">
         <Seg

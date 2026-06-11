@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { sql, type RequestRow, type UserRow } from "../db.js";
-import { requireAuth } from "../middleware.js";
+import { requireEmployee } from "../middleware.js";
 import {
   DINAS_DESTINATIONS,
   DINAS_MAX_NIGHTS,
@@ -29,7 +29,7 @@ import {
 } from "../rules.js";
 
 export const requestsRouter = Router();
-requestsRouter.use(requireAuth);
+requestsRouter.use(requireEmployee);
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal: YYYY-MM-DD");
 

@@ -92,6 +92,11 @@ authRouter.post("/login", async (req, res) => {
 // on Sunday the Tata Usaha schedule has two.
 authRouter.get("/me", requireAuth, async (req, res) => {
   const user = req.user!;
+  // Admins don't clock in — no attendance state to report.
+  if (user.role === "admin") {
+    res.json({ user: publicUser(user), today: null, todayDone: false, remainingShifts: null });
+    return;
+  }
   const date = dateStr();
   const sessions = await sql<AttendanceRow[]>`
     SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${date} ORDER BY shift
