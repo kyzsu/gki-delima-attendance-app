@@ -214,16 +214,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const pendingLoc = React.useRef<Coords>({});
 
   const loadSession = React.useCallback(async () => {
-    const [me, logRows, reqRows] = await Promise.all([
-      api.me(),
-      api.attendanceLog(),
-      api.requests(),
-    ]);
+    const me = await api.me();
     setApiUser(me.user);
     setToday(me.today);
     setTodayDone(me.todayDone);
-    setLog(logRows.map(toLogEntry));
-    setRequests(reqRows);
+    if (me.user.role === "employee") {
+      // Attendance and request endpoints are employee-only.
+      const [logRows, reqRows] = await Promise.all([api.attendanceLog(), api.requests()]);
+      setLog(logRows.map(toLogEntry));
+      setRequests(reqRows);
+    } else {
+      setLog([]);
+      setRequests([]);
+    }
     setAuthed(true);
   }, []);
 

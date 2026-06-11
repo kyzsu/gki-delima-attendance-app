@@ -27,6 +27,18 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   next();
 }
 
+/** Attendance and request features are for employees — admins approve, they
+ *  don't clock in or file cuti/lembur. */
+export async function requireEmployee(req: Request, res: Response, next: NextFunction) {
+  await requireAuth(req, res, () => {
+    if (req.user?.role !== "employee") {
+      res.status(403).json({ error: "Fitur ini khusus karyawan." });
+      return;
+    }
+    next();
+  });
+}
+
 export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   await requireAuth(req, res, () => {
     if (req.user?.role !== "admin") {

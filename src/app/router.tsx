@@ -56,11 +56,13 @@ function SignupShell() {
   );
 }
 
-/** Gates the app screens behind a valid session. */
-function RequireAuth() {
-  const { ready, authed } = useApp();
+/** Employee-only screens (attendance, requests, history, profile) —
+ *  admins have their own homepage at /admin. */
+function RequireEmployee() {
+  const { ready, authed, user } = useApp();
   if (!ready) return null;
   if (!authed) return <Navigate to="/login" replace />;
+  if (user.role === "admin") return <Navigate to="/admin" replace />;
   return <Outlet />;
 }
 
@@ -90,7 +92,7 @@ const router = createBrowserRouter([
         ],
       },
       {
-        element: <RequireAuth />,
+        element: <RequireEmployee />,
         children: [
           { path: "/home", element: <HomeScreen /> },
 

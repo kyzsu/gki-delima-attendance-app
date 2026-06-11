@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Response } from "express";
 import { z } from "zod";
 import { sql, type AttendanceRow } from "../db.js";
-import { requireAuth } from "../middleware.js";
+import { requireEmployee } from "../middleware.js";
 import {
   CHURCH,
   DEMO_MODE,
@@ -16,7 +16,7 @@ import {
 } from "../rules.js";
 
 export const attendanceRouter = Router();
-attendanceRouter.use(requireAuth);
+attendanceRouter.use(requireEmployee);
 
 const locationSchema = z.object({
   lat: z.number().min(-90).max(90).optional(),
