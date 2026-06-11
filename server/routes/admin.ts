@@ -1,5 +1,7 @@
+import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
+import { hashPassword } from "../auth.js";
 import { sql, type AttendanceRow, type RequestRow, type UserRow } from "../db.js";
 import { invalidateUser, publicUser, requireAdmin } from "../middleware.js";
 import { approveRequest } from "./requests.js";
@@ -34,6 +36,26 @@ adminRouter.post("/users/:id/decision", async (req, res) => {
   await sql`UPDATE users SET status = ${body.data.decision} WHERE id = ${user.id}`;
   invalidateUser(user.id);
   res.json({ id: user.id, status: body.data.decision });
+});
+
+// Password reset: generates a temporary password shown to the admin once
+// (relayed to the employee in person/WA — no email service). The employee
+// must change it at the next login.
+adminRouter.post("/users/:id/reset-password", async (req, res) => {
+  const [user] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${Number(req.params.id) || 0}`;
+  if (!user) {
+    res.status(404).json({ error: "Pengguna tidak ditemukan." });
+    return;
+  }
+  const tempPassword = `gki-${randomBytes(4).toString("hex")}`;
+  await sql`
+    UPDATE users
+    SET password_hash = ${hashPassword(tempPassword)},
+        must_change_password = true, reset_requested_at = NULL
+    WHERE id = ${user.id}
+  `;
+  invalidateUser(user.id);
+  res.json({ id: user.id, tempPassword });
 });
 
 // Assign the Pasal 5 work schedule (Tata Usaha / Sopir / Koster).

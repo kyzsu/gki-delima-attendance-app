@@ -20,7 +20,9 @@ export function LoginScreen() {
     setError(null);
     try {
       const user = await login(email, password);
-      navigate(user.role === "admin" ? "/admin" : "/home");
+      navigate(
+        user.mustChangePassword ? "/change-password" : user.role === "admin" ? "/admin" : "/home",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
       setBusy(false);
@@ -43,7 +45,9 @@ export function LoginScreen() {
         <PasswordField label="Kata Sandi" placeholder="Masukkan kata sandi" autoComplete="current-password"
           value={password} onChange={(e) => setPassword(e.target.value)} required />
         <div className="text-right mt-[2px] mb-[22px]">
-          <a className="text-primary text-[13.5px] font-semibold cursor-pointer hover:underline">Lupa kata sandi?</a>
+          <Link to="/forgot" className="text-primary text-[13.5px] font-semibold no-underline hover:underline">
+            Lupa kata sandi?
+          </Link>
         </div>
         {error && (
           <div

@@ -36,6 +36,9 @@ export function ProfileScreen() {
       </SummaryCard>
 
       <div className="flex-1 min-h-4" />
+      <Button variant="outline" className="mb-[10px]" onClick={() => navigate("/change-password")}>
+        Ubah Kata Sandi
+      </Button>
       <Button
         variant="outline"
         onClick={() => {

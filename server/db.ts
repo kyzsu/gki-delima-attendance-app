@@ -26,6 +26,8 @@ export interface UserRow {
   position: "tata_usaha" | "sopir" | "koster";
   status: "pending" | "approved" | "rejected";
   leave_balance: number;
+  must_change_password: boolean;
+  reset_requested_at: Date | null;
   created_at: Date;
 }
 

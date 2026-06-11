@@ -89,6 +89,54 @@ authRouter.post("/login", async (req, res) => {
   res.json({ token: signToken(user.id, user.role), user: publicUser(user) });
 });
 
+// "Lupa kata sandi" — records a reset request for the admin to act on
+// (no email service; the admin relays a temporary password in person).
+// Always responds the same way so account existence isn't leaked.
+const forgotSchema = z.object({ email: z.string().trim().toLowerCase().email() });
+
+authRouter.post("/forgot", async (req, res) => {
+  const body = forgotSchema.safeParse(req.body);
+  if (body.success) {
+    await sql`
+      UPDATE users SET reset_requested_at = now()
+      WHERE email = ${body.data.email} AND status = 'approved'
+    `;
+    const [u] = await sql<{ id: number }[]>`SELECT id FROM users WHERE email = ${body.data.email}`;
+    if (u) invalidateUser(u.id);
+  }
+  res.json({
+    ok: true,
+    message: "Permintaan tercatat. Hubungi Koordinator Personalia untuk menerima kata sandi sementara.",
+  });
+});
+
+// Change password — also clears the forced-change flag after an admin reset.
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+authRouter.post("/change-password", requireAuth, async (req, res) => {
+  const body = changePasswordSchema.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Kata sandi baru minimal 8 karakter." });
+    return;
+  }
+  const user = req.user!;
+  if (!verifyPassword(body.data.currentPassword, user.password_hash)) {
+    res.status(401).json({ error: "Kata sandi saat ini salah." });
+    return;
+  }
+  await sql`
+    UPDATE users
+    SET password_hash = ${hashPassword(body.data.newPassword)},
+        must_change_password = false, reset_requested_at = NULL
+    WHERE id = ${user.id}
+  `;
+  invalidateUser(user.id);
+  res.json({ ok: true });
+});
+
 // Profile + today's attendance in one call (backs /home and /profile).
 // `today` is the currently open session (or the last closed one when more
 // shifts remain); `todayDone` says every scheduled session is recorded —

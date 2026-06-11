@@ -143,6 +143,7 @@ interface AppState {
     email: string;
     role: "employee" | "admin";
     position: "tata_usaha" | "sopir" | "koster";
+    mustChangePassword: boolean;
   };
   leaveBalance: number;
 
@@ -215,6 +216,8 @@ const GUEST: ApiUser = {
   position: "tata_usaha",
   status: "approved",
   leaveBalance: 0,
+  mustChangePassword: false,
+  resetRequested: false,
 };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -266,6 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       email: apiUser.email,
       role: apiUser.role,
       position: apiUser.position,
+      mustChangePassword: apiUser.mustChangePassword,
     },
     leaveBalance: apiUser.leaveBalance,
 

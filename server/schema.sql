@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   position      TEXT NOT NULL DEFAULT 'tata_usaha' CHECK (position IN ('tata_usaha', 'sopir', 'koster')),
   status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   leave_balance INT  NOT NULL DEFAULT 12,
+  must_change_password BOOLEAN NOT NULL DEFAULT false, -- set by admin password reset
+  reset_requested_at   TIMESTAMPTZ,                    -- "lupa kata sandi" pending request
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

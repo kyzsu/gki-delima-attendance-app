@@ -4,6 +4,8 @@ import { SignupProvider } from "@/screens/signup/signup-context";
 
 import { SplashScreen } from "@/screens/auth/splash";
 import { LoginScreen } from "@/screens/auth/login";
+import { ForgotScreen } from "@/screens/auth/forgot";
+import { ChangePasswordScreen } from "@/screens/auth/change-password";
 
 import { Step1Screen } from "@/screens/signup/step1";
 import { Step2Screen } from "@/screens/signup/step2";
@@ -62,6 +64,7 @@ function RequireEmployee() {
   const { ready, authed, user } = useApp();
   if (!ready) return null;
   if (!authed) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />;
   if (user.role === "admin") return <Navigate to="/admin" replace />;
   return <Outlet />;
 }
@@ -71,7 +74,16 @@ function RequireAdmin() {
   const { ready, authed, user } = useApp();
   if (!ready) return null;
   if (!authed) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />;
   if (user.role !== "admin") return <Navigate to="/home" replace />;
+  return <Outlet />;
+}
+
+/** Any signed-in user (employee or admin) — e.g. the change-password screen. */
+function RequireUser() {
+  const { ready, authed } = useApp();
+  if (!ready) return null;
+  if (!authed) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
@@ -81,6 +93,11 @@ const router = createBrowserRouter([
     children: [
       { path: "/", element: <SplashScreen /> },
       { path: "/login", element: <LoginScreen /> },
+      { path: "/forgot", element: <ForgotScreen /> },
+      {
+        element: <RequireUser />,
+        children: [{ path: "/change-password", element: <ChangePasswordScreen /> }],
+      },
       {
         element: <SignupShell />,
         children: [
