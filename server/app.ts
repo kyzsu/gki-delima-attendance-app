@@ -38,10 +38,10 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Public geofence config so the frontend doesn't hardcode coordinates.
-// s-maxage lets Vercel's CDN serve this without invoking the function;
-// stale-while-revalidate keeps it instant when the cache expires.
+// Edge-cached only (s-maxage; Vercel purges it on every deploy) — no browser
+// max-age, so demo-mode flips reach clients immediately after a redeploy.
 app.get("/api/config", (_req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400");
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=3600");
   res.json({ church: CHURCH, geofenceRadiusM: GEOFENCE_RADIUS_M, demoMode: DEMO_MODE });
 });
 
