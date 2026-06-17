@@ -39,13 +39,12 @@ export type LocationResult =
   | ({ kind: "out-of-range"; distanceM: number } & Coords)
   | { kind: "gps-off" };
 
-let configCache: Promise<ApiConfig> | null = null;
-function getConfig() {
-  configCache ??= api.config().catch(() => {
-    configCache = null;
-    return { church: CHURCH, geofenceRadiusM: GEOFENCE_RADIUS_M, demoMode: true };
-  });
-  return configCache;
+// Fetched fresh per location check (once per check-in/out flow — the Vercel
+// edge cache absorbs the traffic) so a demo-mode flip applies immediately.
+function getConfig(): Promise<ApiConfig> {
+  return api
+    .config()
+    .catch(() => ({ church: CHURCH, geofenceRadiusM: GEOFENCE_RADIUS_M, demoMode: true }));
 }
 
 /** Pre-flight location check for the locating screen. The server re-validates
