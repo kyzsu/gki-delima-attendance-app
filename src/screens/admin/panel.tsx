@@ -7,6 +7,7 @@ import { Sk } from "@/components/ui/skeleton";
 import { Ic, RIc } from "@/components/icons";
 import { useApp, fmtTime, fmtDateLong, greeting } from "@/app/store";
 import { statusChip } from "@/screens/attendance/home";
+import { RequestSheet } from "./request-sheet";
 import {
   api,
   getToken,
@@ -141,6 +142,7 @@ export function AdminPanelScreen() {
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [tempPw, setTempPw] = React.useState<{ name: string; pw: string } | null>(null);
+  const [sheetReq, setSheetReq] = React.useState<AdminRequest | null>(null);
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -166,17 +168,28 @@ export function AdminPanelScreen() {
     void load();
   }, [load]);
 
-  async function decide(action: () => Promise<unknown>, key: string) {
+  async function decide(action: () => Promise<unknown>, key: string): Promise<boolean> {
     setBusyId(key);
     setError(null);
     try {
       await action();
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+      return false;
     } finally {
       setBusyId(null);
     }
+  }
+
+  async function decideRequest(decision: "Disetujui" | "Ditolak", reason?: string) {
+    if (!sheetReq) return;
+    const ok = await decide(
+      () => api.adminDecideRequest(sheetReq.id, decision, reason),
+      `r${sheetReq.id}`,
+    );
+    if (ok) setSheetReq(null);
   }
 
   async function resetPassword(u: ApiUser) {
@@ -448,31 +461,40 @@ export function AdminPanelScreen() {
           {pendingReqs.length === 0 && (
             <EmptyNote>Semua pengajuan sudah ditindaklanjuti — tidak ada yang menunggu.</EmptyNote>
           )}
-          {pendingReqs.map((r) => (
-            <div key={r.id} className="bg-card border border-line rounded-[16px] px-[15px] py-[13px]">
-              <div className="flex items-center gap-3">
-                <span className="w-9 h-9 rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">
-                  {KIND_ICON[r.kind]}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13.5px] font-extrabold text-ink truncate">{r.title}</div>
-                  <div className="text-[11.5px] text-muted truncate">{r.userName} · {r.detail}</div>
-                </div>
-                <StatusChip status={r.status} />
-              </div>
-              <DecideButtons
-                busy={busyId === `r${r.id}`}
-                onApprove={() => decide(() => api.adminDecideRequest(r.id, "Disetujui"), `r${r.id}`)}
-                onReject={() => decide(() => api.adminDecideRequest(r.id, "Ditolak"), `r${r.id}`)}
-              />
+          {pendingReqs.length > 0 && (
+            <div className="text-[11px] text-muted px-1 mb-1">
+              Ketuk pengajuan untuk melihat detail lengkap sebelum menyetujui / menolak.
             </div>
+          )}
+          {pendingReqs.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setSheetReq(r)}
+              className="w-full flex items-center gap-3 bg-card border border-line rounded-[16px] px-[15px] py-[13px] text-left cursor-pointer transition-all hover:border-line2 hover:-translate-y-px"
+            >
+              <span className="w-9 h-9 rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">
+                {KIND_ICON[r.kind]}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13.5px] font-extrabold text-ink truncate">{r.title}</div>
+                <div className="text-[11.5px] text-muted truncate">{r.userName} · {r.detail}</div>
+              </div>
+              <StatusChip status={r.status} />
+              <span className="text-line2 flex shrink-0">{RIc.chevR}</span>
+            </button>
           ))}
 
           {decidedReqs.length > 0 && (
             <>
               <div className="mt-4 mb-1 text-[13px] font-extrabold text-ink">Riwayat keputusan</div>
               {decidedReqs.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 bg-card border border-line rounded-[14px] px-[13px] py-[11px]">
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setSheetReq(r)}
+                  className="w-full flex items-center gap-3 bg-card border border-line rounded-[14px] px-[13px] py-[11px] text-left cursor-pointer hover:border-line2"
+                >
                   <span className="w-[34px] h-[34px] rounded-[10px] bg-tint text-muted flex items-center justify-center shrink-0">
                     {KIND_ICON[r.kind]}
                   </span>
@@ -481,11 +503,21 @@ export function AdminPanelScreen() {
                     <div className="text-[11.5px] text-muted truncate">{r.userName} · {r.detail}</div>
                   </div>
                   <StatusChip status={r.status} />
-                </div>
+                  <span className="text-line2 flex shrink-0">{RIc.chevR}</span>
+                </button>
               ))}
             </>
           )}
         </div>
+      )}
+
+      {sheetReq && (
+        <RequestSheet
+          req={sheetReq}
+          busy={busyId === `r${sheetReq.id}`}
+          onClose={() => setSheetReq(null)}
+          onDecide={decideRequest}
+        />
       )}
     </div>
   );
