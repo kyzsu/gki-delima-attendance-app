@@ -99,6 +99,19 @@ adminRouter.get("/requests", async (req, res) => {
       status: r.status,
       createdAt: r.created_at,
       userName: r.user_name,
+      // Structured fields so the admin detail sheet can show complete info.
+      leaveType: r.leave_type,
+      place: r.place,
+      doctorNote: r.doctor_note,
+      startDate: r.start_date,
+      endDate: r.end_date,
+      days: r.days,
+      dest: r.dest,
+      overnight: r.overnight,
+      nights: r.nights,
+      amount: r.amount,
+      hours: r.hours,
+      rejectReason: r.reject_reason,
     })),
   );
 });
@@ -194,12 +207,20 @@ adminRouter.get("/absences", async (req, res) => {
   res.json({ month, from, to, absences });
 });
 
-const reqDecisionSchema = z.object({ decision: z.enum(["Disetujui", "Ditolak"]) });
+const reqDecisionSchema = z.object({
+  decision: z.enum(["Disetujui", "Ditolak"]),
+  reason: z.string().trim().max(500).optional(), // required when rejecting
+});
 
 adminRouter.post("/requests/:id/decision", async (req, res) => {
   const body = reqDecisionSchema.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "decision harus 'Disetujui' atau 'Ditolak'." });
+    return;
+  }
+  // A rejection must carry a reason — it's shown to the applicant.
+  if (body.data.decision === "Ditolak" && !body.data.reason) {
+    res.status(400).json({ error: "Alasan penolakan wajib diisi." });
     return;
   }
   const [request] = await sql<RequestRow[]>`
@@ -216,7 +237,10 @@ adminRouter.post("/requests/:id/decision", async (req, res) => {
   if (body.data.decision === "Disetujui") {
     await approveRequest(request);
   } else {
-    await sql`UPDATE requests SET status = 'Ditolak' WHERE id = ${request.id}`;
+    await sql`
+      UPDATE requests SET status = 'Ditolak', reject_reason = ${body.data.reason!}
+      WHERE id = ${request.id}
+    `;
   }
   res.json({ id: request.id, status: body.data.decision });
 });

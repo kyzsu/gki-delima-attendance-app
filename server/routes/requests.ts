@@ -40,6 +40,7 @@ function publicRequest(r: RequestRow) {
     title: r.title,
     detail: r.detail,
     status: r.status,
+    rejectReason: r.reject_reason,
     createdAt: r.created_at,
   };
 }

@@ -100,6 +100,7 @@ export interface ApiRequest {
   title: string;
   detail: string;
   status: "Menunggu" | "Disetujui" | "Ditolak";
+  rejectReason: string | null;
   createdAt: string;
 }
 
@@ -111,6 +112,17 @@ export interface ApiConfig {
 
 export interface AdminRequest extends ApiRequest {
   userName: string;
+  leaveType: LeaveType | null;
+  place: "inCity" | "outside" | null;
+  doctorNote: boolean | null;
+  startDate: string | null;
+  endDate: string | null;
+  days: number | null;
+  dest: string | null;
+  overnight: boolean | null;
+  nights: number | null;
+  amount: number | null;
+  hours: number | null;
 }
 
 export interface Coords {
@@ -219,10 +231,10 @@ export const api = {
   adminRequests: (status?: "Menunggu" | "Disetujui" | "Ditolak") =>
     request<AdminRequest[]>(`/admin/requests${status ? `?status=${status}` : ""}`),
 
-  adminDecideRequest: (id: number, decision: "Disetujui" | "Ditolak") =>
+  adminDecideRequest: (id: number, decision: "Disetujui" | "Ditolak", reason?: string) =>
     request<{ id: number; status: string }>(`/admin/requests/${id}/decision`, {
       method: "POST",
-      json: { decision },
+      json: { decision, ...(reason ? { reason } : {}) },
     }),
 
   adminResetPassword: (id: number) =>

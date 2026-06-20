@@ -63,5 +63,6 @@ export interface RequestRow {
   nights: number | null;
   amount: number | null;
   hours: number | null;
+  reject_reason: string | null;
   created_at: Date;
 }

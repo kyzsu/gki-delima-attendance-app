@@ -35,6 +35,7 @@ async function main() {
     UPDATE requests SET leave_type = 'duka_ortu' WHERE leave_type = 'duka';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested_at TIMESTAMPTZ;
+    ALTER TABLE requests ADD COLUMN IF NOT EXISTS reject_reason TEXT;
   `);
 
   const [admin] = await sql`SELECT id FROM users WHERE email = ${ADMIN_EMAIL.toLowerCase()}`;

@@ -51,26 +51,40 @@ export function RequestHubScreen() {
 
       <div className="mt-[26px] mb-[10px] text-[13px] font-extrabold text-ink">Pengajuan terbaru</div>
       <div className="flex flex-col gap-2">
-        {requests.map((r, i) => (
-          <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] px-[13px] py-[11px]">
-            <span className="w-[34px] h-[34px] rounded-[10px] bg-tint text-muted flex items-center justify-center shrink-0">
-              {KIND_ICON[r.kind]}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-bold text-ink">{r.title}</div>
-              <div className="text-[11.5px] text-muted">{r.detail}</div>
+        {requests.map((r, i) => {
+          const rejected = r.status === "Ditolak";
+          const approved = r.status === "Disetujui";
+          return (
+            <div key={i} className="bg-card border border-line rounded-[14px] px-[13px] py-[11px]">
+              <div className="flex items-center gap-3">
+                <span className="w-[34px] h-[34px] rounded-[10px] bg-tint text-muted flex items-center justify-center shrink-0">
+                  {KIND_ICON[r.kind]}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-bold text-ink">{r.title}</div>
+                  <div className="text-[11.5px] text-muted">{r.detail}</div>
+                </div>
+                <span
+                  className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
+                  style={{
+                    background: approved ? "var(--tint2)" : rejected ? "var(--danger-soft)" : "var(--warn-soft)",
+                    color: approved ? "var(--primary)" : rejected ? "var(--danger)" : "var(--warn)",
+                  }}
+                >
+                  {r.status}
+                </span>
+              </div>
+              {rejected && r.rejectReason && (
+                <div
+                  className="mt-2 rounded-[10px] px-3 py-2 text-[11.5px] leading-[1.45]"
+                  style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
+                >
+                  <b>Alasan ditolak:</b> {r.rejectReason}
+                </div>
+              )}
             </div>
-            <span
-              className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full"
-              style={{
-                background: r.status === "Disetujui" ? "var(--tint2)" : "var(--warn-soft)",
-                color: r.status === "Disetujui" ? "var(--primary)" : "var(--warn)",
-              }}
-            >
-              {r.status}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <TabBar />
     </div>
