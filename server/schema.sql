@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS requests (
   nights      INT,                       -- dinas
   amount      INT,                       -- dinas: total allowance (IDR)
   hours       DOUBLE PRECISION,          -- lembur
+  note        TEXT,                      -- free-text keterangan filled by the applicant (e.g. dinas purpose)
   reject_reason TEXT,                    -- admin's reason when status = 'Ditolak', shown to the applicant
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
