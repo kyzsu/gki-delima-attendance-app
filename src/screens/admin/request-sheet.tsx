@@ -109,6 +109,15 @@ export function RequestSheet({
           <Row k="Status" v={req.status} last />
         </SummaryCard>
 
+        {req.note && (
+          <div className="mt-3 rounded-[13px] bg-tint px-4 py-3">
+            <div className="text-[11px] font-extrabold text-muted uppercase tracking-[0.4px] mb-1">
+              Keterangan
+            </div>
+            <div className="text-[13.5px] text-ink leading-[1.5]">{req.note}</div>
+          </div>
+        )}
+
         {req.status === "Ditolak" && req.rejectReason && (
           <div className="mt-3 rounded-[13px] px-4 py-3 text-[13px]" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
             <b>Alasan penolakan:</b> {req.rejectReason}

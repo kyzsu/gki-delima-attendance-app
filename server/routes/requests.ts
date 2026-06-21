@@ -40,6 +40,7 @@ function publicRequest(r: RequestRow) {
     title: r.title,
     detail: r.detail,
     status: r.status,
+    note: r.note,
     rejectReason: r.reject_reason,
     createdAt: r.created_at,
   };
@@ -182,6 +183,7 @@ const dinasSchema = z.object({
   departDate: dateSchema,
   overnight: z.boolean().optional(),
   nights: z.number().int().min(1).max(DINAS_MAX_NIGHTS).optional(),
+  note: z.string().trim().max(500).optional(), // keterangan / trip purpose
 });
 
 requestsRouter.post("/dinas", async (req, res) => {
@@ -210,9 +212,9 @@ requestsRouter.post("/dinas", async (req, res) => {
       ? `${nights} mlm · ${fmtIDR(allowance.total)}`
       : `1 hari · ${fmtIDR(allowance.total)}`;
   const [created] = await sql<{ id: number }[]>`
-    INSERT INTO requests (user_id, kind, title, detail, start_date, end_date, dest, overnight, nights, amount)
+    INSERT INTO requests (user_id, kind, title, detail, start_date, end_date, dest, overnight, nights, amount, note)
     VALUES (${req.user!.id}, 'dinas', ${`Dinas — ${dest}`}, ${detail}, ${departDate},
-            ${returnDate}, ${dest}, ${overnight}, ${nights}, ${allowance.total})
+            ${returnDate}, ${dest}, ${overnight}, ${nights}, ${allowance.total}, ${body.data.note ?? null})
     RETURNING id
   `;
   res.status(201).json({

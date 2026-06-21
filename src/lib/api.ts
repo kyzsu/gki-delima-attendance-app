@@ -100,6 +100,7 @@ export interface ApiRequest {
   title: string;
   detail: string;
   status: "Menunggu" | "Disetujui" | "Ditolak";
+  note: string | null;
   rejectReason: string | null;
   createdAt: string;
 }
@@ -200,7 +201,7 @@ export const api = {
       { method: "POST", json: data },
     ),
 
-  submitDinas: (data: { dest: string; departDate: string; overnight?: boolean; nights?: number }) =>
+  submitDinas: (data: { dest: string; departDate: string; overnight?: boolean; nights?: number; note?: string }) =>
     request<{
       id: number;
       dest: string;

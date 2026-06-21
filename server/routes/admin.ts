@@ -111,6 +111,7 @@ adminRouter.get("/requests", async (req, res) => {
       nights: r.nights,
       amount: r.amount,
       hours: r.hours,
+      note: r.note,
       rejectReason: r.reject_reason,
     })),
   );

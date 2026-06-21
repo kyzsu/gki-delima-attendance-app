@@ -36,6 +36,7 @@ export function DinasFormScreen() {
   const navigate = useNavigate();
   const { submitDinas } = useApp();
   const [dest, setDest] = React.useState("Jakarta");
+  const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const inside = DEST.find((d) => d.v === dest)!.jabo;
@@ -43,13 +44,14 @@ export function DinasFormScreen() {
 
   async function submit() {
     if (!inside) {
-      navigate("/requests/dinas/allowance", { state: { dest } });
+      // Carry the keterangan through to the allowance step.
+      navigate("/requests/dinas/allowance", { state: { dest, note } });
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await submitDinas({ dest, departDate: dateStr(depart) });
+      await submitDinas({ dest, departDate: dateStr(depart), note: note.trim() || undefined });
       navigate("/requests/dinas/sent", { state: { dest, total: 0, nights: 0 } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
@@ -105,6 +107,17 @@ export function DinasFormScreen() {
         </div>
       </div>
 
+      <div className="mt-[14px]">
+        <FieldLabel upper hint="tujuan perjalanan">Keterangan</FieldLabel>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          placeholder="cth. Antar paduan suara Gabriel ke GKI Bromo"
+          className="w-full rounded-[14px] border border-line2 bg-card px-4 py-[11px] text-[14px] text-ink font-sans outline-none focus:border-primary resize-none"
+        />
+      </div>
+
       <div className="flex-1 min-h-4" />
       {error && (
         <div className="mb-3">
@@ -139,6 +152,7 @@ export function DinasAllowanceScreen() {
   const location = useLocation();
   const { submitDinas } = useApp();
   const dest: string = location.state?.dest ?? "Bandung";
+  const note: string = location.state?.note ?? "";
 
   const [overnight, setOvernight] = React.useState<"none" | "over">("over");
   const [nights, setNights] = React.useState(2);
@@ -160,6 +174,7 @@ export function DinasAllowanceScreen() {
         departDate: dateStr(new Date()),
         overnight: isOver,
         ...(isOver ? { nights } : {}),
+        note: note.trim() || undefined,
       });
       navigate("/requests/dinas/sent", {
         state: { dest, total: res.allowance.total, nights: res.nights },
