@@ -15,7 +15,7 @@ export function RequestHubScreen() {
   const navigate = useNavigate();
   const { user, requests } = useApp();
   return (
-    <div className="flex flex-col flex-1 relative bg-bg px-6 pt-[60px] pb-[100px]">
+    <div className="flex flex-col flex-1 relative bg-bg px-6 pt-safe-60 pb-[100px]">
       <div className="flex items-center gap-3 mb-[22px]">
         <div
           className="w-[46px] h-[46px] rounded-full text-white flex items-center justify-center font-extrabold text-[17px] shrink-0"

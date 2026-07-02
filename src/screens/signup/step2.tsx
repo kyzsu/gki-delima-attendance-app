@@ -34,7 +34,7 @@ export function Step2Screen() {
   const valid = rules.len && rules.caseMix && rules.num && pw === pw2;
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-7 pt-[58px] pb-11">
+    <div className="flex flex-col flex-1 bg-bg px-7 pt-safe-58 pb-11">
       <StepHead step={2} title="Buat kata sandi" sub="Lindungi akun presensi Anda dengan kata sandi yang kuat." backTo="/signup/step-1" />
       <form
         className="contents"

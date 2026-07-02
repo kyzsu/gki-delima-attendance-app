@@ -6,6 +6,7 @@ import { Stepper } from "@/components/ui/stepper";
 import { Note } from "@/components/ui/note";
 import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { ScreenHead } from "@/components/screen-head";
+import { FormScreen } from "@/components/form-screen";
 import { SentScaffold } from "@/components/sent-scaffold";
 import { Ic, bigClock } from "@/components/icons";
 import { useApp, dateStr } from "@/app/store";
@@ -53,6 +54,7 @@ export function LemburFormScreen() {
   const navigate = useNavigate();
   const { submitLembur } = useApp();
   const [hours, setHours] = React.useState(2);
+  const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const over = hours > DAILY_CAP;
@@ -64,7 +66,7 @@ export function LemburFormScreen() {
     setBusy(true);
     setError(null);
     try {
-      await submitLembur({ date: dateStr(date), hours });
+      await submitLembur({ date: dateStr(date), hours, note: note.trim() || undefined });
       navigate("/requests/lembur/sent", { state: { hours, date: date.toISOString() } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
@@ -73,8 +75,21 @@ export function LemburFormScreen() {
   }
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
-      <ScreenHead title="Pengajuan Lembur" sub={`Maks ${DAILY_CAP} jam/hari · ${WEEKLY_CAP} jam/minggu.`} close to="/requests" />
+    <FormScreen
+      head={<ScreenHead title="Pengajuan Lembur" sub={`Maks ${DAILY_CAP} jam/hari · ${WEEKLY_CAP} jam/minggu.`} close to="/requests" />}
+      footer={
+        <>
+          {error && (
+            <div className="mb-3">
+              <Note tone="danger" icon={Ic.alert}>{error}</Note>
+            </div>
+          )}
+          <Button variant="primary" disabled={over || busy} onClick={submit}>
+            {over ? "Kurangi jam untuk melanjutkan" : busy ? "Mengirim…" : "Kirim Pengajuan"}
+          </Button>
+        </>
+      }
+    >
       <div className="flex gap-[10px] mb-4">
         <div className="flex-1">
           <FieldLabel upper>Tanggal</FieldLabel>
@@ -124,16 +139,18 @@ export function LemburFormScreen() {
         )}
       </div>
 
-      <div className="flex-1 min-h-4" />
-      {error && (
-        <div className="mb-3">
-          <Note tone="danger" icon={Ic.alert}>{error}</Note>
-        </div>
-      )}
-      <Button variant="primary" disabled={over || busy} onClick={submit}>
-        {over ? "Kurangi jam untuk melanjutkan" : busy ? "Mengirim…" : "Kirim Pengajuan"}
-      </Button>
-    </div>
+      <div className="mt-[14px]">
+        <FieldLabel upper hint="alasan lembur">Keterangan</FieldLabel>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          placeholder="cth. Mendampingi retreat komisi Pemuda"
+          className="w-full rounded-[14px] border border-line2 bg-card px-4 py-[11px] text-[14px] text-ink font-sans outline-none focus:border-primary resize-none"
+        />
+      </div>
+
+    </FormScreen>
   );
 }
 

@@ -1,0 +1,27 @@
+{
+  "name": "GKI Delima · Presensi Karyawan",
+  "short_name": "GKI Delima",
+  "description": "Aplikasi presensi & pengajuan karyawan GKI Delima.",
+  "lang": "id",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf6fb",
+  "theme_color": "#c13ad6",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ]
+}

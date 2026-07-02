@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Note } from "@/components/ui/note";
 import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { ScreenHead } from "@/components/screen-head";
+import { FormScreen } from "@/components/form-screen";
 import { SentScaffold } from "@/components/sent-scaffold";
 import { Ic, RIc, bigClock } from "@/components/icons";
 import { useApp, dateStr, fmtDateLong } from "@/app/store";
@@ -98,8 +99,26 @@ export function CutiFormScreen() {
   }
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
-      <ScreenHead title="Pengajuan Cuti & Izin" sub="Pilih alasan — aturan Pasal 5 menyesuaikan otomatis." close to="/requests" />
+    <FormScreen
+      head={<ScreenHead title="Pengajuan Cuti & Izin" sub="Pilih alasan — aturan Pasal 5 menyesuaikan otomatis." close to="/requests" />}
+      footer={
+        <>
+          {error && (
+            <div className="mb-3">
+              <Note tone="danger" icon={RIc.siren}>{error}</Note>
+            </div>
+          )}
+          <Button variant="primary" disabled={busy} onClick={submit}>
+            {busy ? "Mengirim…" : type === "sakit" ? "Lanjutkan" : "Kirim Pengajuan"}
+          </Button>
+          {cutsBalance && type === "izin" && (
+            <div className="text-center text-[11.5px] text-muted mt-2">
+              Di luar alasan ayat (5), izin diberikan atas pertimbangan Koordinator Personalia.
+            </div>
+          )}
+        </>
+      }
+    >
       <FieldLabel upper>Jenis</FieldLabel>
       <div className="mb-4">
         <ChipRow options={LEAVE_OPTS} value={type} onChange={setType} />
@@ -177,21 +196,7 @@ export function CutiFormScreen() {
         </Note>
       )}
 
-      <div className="flex-1 min-h-4" />
-      {error && (
-        <div className="mb-3">
-          <Note tone="danger" icon={RIc.siren}>{error}</Note>
-        </div>
-      )}
-      <Button variant="primary" disabled={busy} onClick={submit}>
-        {busy ? "Mengirim…" : type === "sakit" ? "Lanjutkan" : "Kirim Pengajuan"}
-      </Button>
-      {cutsBalance && type === "izin" && (
-        <div className="text-center text-[11.5px] text-muted mt-2">
-          Di luar alasan ayat (5), izin diberikan atas pertimbangan Koordinator Personalia.
-        </div>
-      )}
-    </div>
+    </FormScreen>
   );
 }
 
@@ -217,8 +222,21 @@ export function CutiSakitScreen() {
   }
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
-      <ScreenHead title="Cuti Sakit" sub="Surat dokter menentukan potongan saldo." />
+    <FormScreen
+      head={<ScreenHead title="Cuti Sakit" sub="Surat dokter menentukan potongan saldo." />}
+      footer={
+        <>
+          {error && (
+            <div className="mb-3">
+              <Note tone="danger" icon={Ic.alert}>{error}</Note>
+            </div>
+          )}
+          <Button variant="primary" disabled={busy} onClick={submit}>
+            {busy ? "Mengirim…" : "Kirim Pengajuan"}
+          </Button>
+        </>
+      }
+    >
       <div className="flex justify-between items-center bg-card border border-line rounded-[15px] px-4 py-[15px] mb-[14px]">
         <div className="flex-1 pr-3">
           <div className="text-[13.5px] font-extrabold text-ink">Melampirkan surat dokter?</div>
@@ -247,16 +265,7 @@ export function CutiSakitScreen() {
         </SummaryCard>
       </div>
 
-      <div className="flex-1 min-h-4" />
-      {error && (
-        <div className="mb-3">
-          <Note tone="danger" icon={Ic.alert}>{error}</Note>
-        </div>
-      )}
-      <Button variant="primary" disabled={busy} onClick={submit}>
-        {busy ? "Mengirim…" : "Kirim Pengajuan"}
-      </Button>
-    </div>
+    </FormScreen>
   );
 }
 

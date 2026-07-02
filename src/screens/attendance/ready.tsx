@@ -11,7 +11,7 @@ export function CheckReadyScreen({ mode }: { mode: "in" | "out" }) {
   const { lastDistanceM, checkInAt } = useApp();
   const isIn = mode === "in";
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-58 pb-10">
       <ScreenHead
         title={isIn ? "Presensi Masuk" : "Presensi Pulang"}
         sub={isIn ? "Pastikan Anda berada di area gereja." : "Pastikan Anda masih di area gereja."}

@@ -18,7 +18,7 @@ export function SentScaffold({
 }) {
   const navigate = useNavigate();
   return (
-    <div className="flex flex-col flex-1 bg-bg items-center text-center px-6 pt-[74px] pb-10">
+    <div className="flex flex-col flex-1 bg-bg items-center text-center px-6 pt-safe-74 pb-10">
       <div className="w-[100px] h-[100px] rounded-full bg-tint2 flex items-center justify-center mb-[22px]">
         <div
           className="gki-pop w-[68px] h-[68px] rounded-full text-white flex items-center justify-center"

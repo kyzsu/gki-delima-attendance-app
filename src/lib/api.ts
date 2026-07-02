@@ -213,7 +213,7 @@ export const api = {
       status: string;
     }>("/requests/dinas", { method: "POST", json: data }),
 
-  submitLembur: (data: { date: string; hours: number }) =>
+  submitLembur: (data: { date: string; hours: number; note?: string }) =>
     request<{ id: number; date: string; hours: number; tariff: string; weeklyRemainingHours: number; status: string }>(
       "/requests/lembur",
       { method: "POST", json: data },
