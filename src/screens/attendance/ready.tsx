@@ -2,13 +2,13 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ScreenHead } from "@/components/screen-head";
 import { StatusBanner, InfoChip } from "@/components/status-banner";
-import { GeoMap } from "@/components/geo-map";
+import { GeoFenceMap } from "@/components/geo-fence-map";
 import { Ic } from "@/components/icons";
 import { useApp, fmtTime, CHURCH } from "@/app/store";
 
 export function CheckReadyScreen({ mode }: { mode: "in" | "out" }) {
   const navigate = useNavigate();
-  const { lastDistanceM, checkInAt } = useApp();
+  const { lastDistanceM, lastPos, checkInAt } = useApp();
   const isIn = mode === "in";
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-58 pb-10">
@@ -18,7 +18,7 @@ export function CheckReadyScreen({ mode }: { mode: "in" | "out" }) {
         close
         to="/home"
       />
-      <GeoMap inRange userPos={isIn ? { x: "58%", y: "44%" } : { x: "46%", y: "60%" }} />
+      <GeoFenceMap inRange user={lastPos} />
       <div className="mt-4">
         <StatusBanner ok>
           Anda berada di area {CHURCH.name} — <b>±{lastDistanceM} m</b> dari titik gereja.
