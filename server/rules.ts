@@ -153,7 +153,7 @@ export function workedMinutes(rawMinutes: number, position: Position) {
   return rawMinutes;
 }
 
-// ── Cuti & izin — Pasal 5 ayat (5)–(7) ───────────────────────────
+// ── Leave (cuti & izin) — Pasal 5 ayat (5)–(7) ───────────────────────────
 export type LeaveType =
   | "tahunan"
   | "sakit" // (5a) — without surat dokter it cuts the annual balance
@@ -201,36 +201,36 @@ export function leaveCutsBalance(type: LeaveType, doctorNote: boolean | null | u
   return type === "tahunan" || type === "izin" || (type === "sakit" && !doctorNote);
 }
 
-// ── Dinas (business travel) ──────────────────────────────────────
+// ── Trip / business travel ───────────────────────────────────────
 export const JABODETABEK = ["Jakarta", "Bogor", "Depok", "Tangerang", "Bekasi"];
-export const DINAS_DESTINATIONS = [
+export const TRIP_DESTINATIONS = [
   ...JABODETABEK,
   "Bandung",
   "Semarang",
   "Surabaya",
   "Medan",
 ];
-export const DINAS_RATES = { meal: 75_000, transport: 150_000, lodging: 350_000 };
-export const DINAS_MAX_NIGHTS = 7;
+export const TRIP_RATES = { meal: 75_000, transport: 150_000, lodging: 350_000 };
+export const TRIP_MAX_NIGHTS = 7;
 
 export function isJabodetabek(dest: string) {
   return JABODETABEK.includes(dest);
 }
 
-/** Allowance injection for trips outside Jabodetabek (mirrors dinas.tsx). */
-export function dinasAllowance(overnight: boolean, nights: number) {
-  const transport = DINAS_RATES.transport * (overnight ? 2 : 1);
-  const meals = overnight ? DINAS_RATES.meal * (nights + 1) : DINAS_RATES.meal;
-  const lodging = overnight ? DINAS_RATES.lodging * nights : 0;
+/** Allowance injection for trips outside Jabodetabek (mirrors trip.tsx). */
+export function tripAllowance(overnight: boolean, nights: number) {
+  const transport = TRIP_RATES.transport * (overnight ? 2 : 1);
+  const meals = overnight ? TRIP_RATES.meal * (nights + 1) : TRIP_RATES.meal;
+  const lodging = overnight ? TRIP_RATES.lodging * nights : 0;
   return { transport, meals, lodging, total: transport + meals + lodging };
 }
 
-// ── Lembur (overtime) ────────────────────────────────────────────
-export const LEMBUR_DAILY_CAP_H = 3;
-export const LEMBUR_WEEKLY_CAP_H = 14;
-export const LEMBUR_STEP_H = 0.5;
-export const LEMBUR_MAX_H = 8;
-export const LEMBUR_TARIFF = "1/173 gaji pokok";
+// ── Overtime ──────────────────────────────────────────────────────
+export const OVERTIME_DAILY_CAP_H = 3;
+export const OVERTIME_WEEKLY_CAP_H = 14;
+export const OVERTIME_STEP_H = 0.5;
+export const OVERTIME_MAX_H = 8;
+export const OVERTIME_TARIFF = "1/173 gaji pokok";
 
 // ── Formatting ───────────────────────────────────────────────────
 export const fmtIDR = (n: number) => "Rp " + n.toLocaleString("id-ID");

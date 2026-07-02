@@ -63,10 +63,10 @@ const FIXED_DAYS: Partial<Record<LeaveType, number>> = {
 
 const MELAHIRKAN_DAYS = 90;
 
-// ── CUTI · 1 — form with dynamic rules per leave type ────────────
-export function CutiFormScreen() {
+// ── LEAVE · 1 — form with dynamic rules per leave type ────────────
+export function LeaveFormScreen() {
   const navigate = useNavigate();
-  const { leaveBalance, submitCuti } = useApp();
+  const { leaveBalance, submitLeave } = useApp();
   const [type, setType] = React.useState<LeaveType>("tahunan");
   const [place, setPlace] = React.useState<Place>("inCity");
   const [startDate, setStartDate] = React.useState(() => dateStr());
@@ -91,19 +91,19 @@ export function CutiFormScreen() {
 
   async function submit() {
     if (type === "sakit") {
-      navigate("/requests/cuti/sakit");
+      navigate("/requests/leave/sick");
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await submitCuti({
+      await submitLeave({
         type,
         startDate,
         days,
         ...(type === "duka_ortu" ? { place } : {}),
       });
-      navigate("/requests/cuti/sent", { state: { type, days } });
+      navigate("/requests/leave/sent", { state: { type, days } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
       setBusy(false);
@@ -233,10 +233,10 @@ export function CutiFormScreen() {
   );
 }
 
-// ── CUTI · 2 — sakit, doctor's note toggle ───────────────────────
-export function CutiSakitScreen() {
+// ── LEAVE · 2 — sakit, doctor's note toggle ───────────────────────
+export function SickLeaveScreen() {
   const navigate = useNavigate();
-  const { leaveBalance, submitCuti } = useApp();
+  const { leaveBalance, submitLeave } = useApp();
   const [hasNote, setHasNote] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -246,8 +246,8 @@ export function CutiSakitScreen() {
     setBusy(true);
     setError(null);
     try {
-      await submitCuti({ type: "sakit", startDate: dateStr(today), days: 1, doctorNote: hasNote });
-      navigate("/requests/cuti/sent", { state: { type: "sakit", days: 1 } });
+      await submitLeave({ type: "sakit", startDate: dateStr(today), days: 1, doctorNote: hasNote });
+      navigate("/requests/leave/sent", { state: { type: "sakit", days: 1 } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
       setBusy(false);
@@ -302,8 +302,8 @@ export function CutiSakitScreen() {
   );
 }
 
-// ── CUTI · 3 — sent ──────────────────────────────────────────────
-export function CutiSentScreen() {
+// ── LEAVE · 3 — sent ──────────────────────────────────────────────
+export function LeaveSentScreen() {
   const location = useLocation();
   const state = (location.state ?? {}) as { type?: string; days?: number };
   const jenis = LABEL[state.type as LeaveType] ?? "Cuti Tahunan";

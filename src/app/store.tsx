@@ -164,9 +164,9 @@ interface AppState {
   checkIn: (photo?: string | null) => Promise<void>;
   checkOut: (photo?: string | null) => Promise<void>;
   refresh: () => Promise<void>;
-  submitCuti: typeof api.submitCuti;
-  submitDinas: typeof api.submitDinas;
-  submitLembur: typeof api.submitLembur;
+  submitLeave: typeof api.submitLeave;
+  submitTrip: typeof api.submitTrip;
+  submitOvertime: typeof api.submitOvertime;
 }
 
 const AppContext = React.createContext<AppState | null>(null);
@@ -331,20 +331,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setLog(logRows.map(toLogEntry));
     },
     refresh: loadSession,
-    submitCuti: async (data) => {
-      const res = await api.submitCuti(data);
+    submitLeave: async (data) => {
+      const res = await api.submitLeave(data);
       const [me, reqRows] = await Promise.all([api.me(), api.requests()]);
       setApiUser(me.user);
       setRequests(reqRows);
       return res;
     },
-    submitDinas: async (data) => {
-      const res = await api.submitDinas(data);
+    submitTrip: async (data) => {
+      const res = await api.submitTrip(data);
       setRequests(await api.requests());
       return res;
     },
-    submitLembur: async (data) => {
-      const res = await api.submitLembur(data);
+    submitOvertime: async (data) => {
+      const res = await api.submitOvertime(data);
       setRequests(await api.requests());
       return res;
     },

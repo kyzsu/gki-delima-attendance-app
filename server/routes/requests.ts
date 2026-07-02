@@ -3,21 +3,21 @@ import { z } from "zod";
 import { sql, type RequestRow, type UserRow } from "../db.js";
 import { invalidateUser, requireEmployee } from "../middleware.js";
 import {
-  DINAS_DESTINATIONS,
-  DINAS_MAX_NIGHTS,
+  TRIP_DESTINATIONS,
+  TRIP_MAX_NIGHTS,
   DUKA_ORTU_MAX_DAYS,
   IZIN_MAX_PER_MONTH,
   IZIN_MAX_PER_YEAR,
   LEAVE_FIXED_DAYS,
   LEAVE_LABEL,
-  LEMBUR_DAILY_CAP_H,
-  LEMBUR_MAX_H,
-  LEMBUR_STEP_H,
-  LEMBUR_TARIFF,
-  LEMBUR_WEEKLY_CAP_H,
+  OVERTIME_DAILY_CAP_H,
+  OVERTIME_MAX_H,
+  OVERTIME_STEP_H,
+  OVERTIME_TARIFF,
+  OVERTIME_WEEKLY_CAP_H,
   MELAHIRKAN_MAX_DAYS,
   addDaysStr,
-  dinasAllowance,
+  tripAllowance,
   fmtHours,
   fmtIDR,
   isJabodetabek,
@@ -54,7 +54,7 @@ requestsRouter.get("/", async (req, res) => {
 });
 
 // ── Cuti & izin — Pasal 5 ayat (5)–(7) ───────────────────────────
-const cutiSchema = z.object({
+const leaveSchema = z.object({
   type: z.enum([
     "tahunan",
     "sakit",
@@ -73,8 +73,8 @@ const cutiSchema = z.object({
   doctorNote: z.boolean().optional(), // sakit only
 });
 
-requestsRouter.post("/cuti", async (req, res) => {
-  const body = cutiSchema.safeParse(req.body);
+requestsRouter.post("/leave", async (req, res) => {
+  const body = leaveSchema.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Data cuti tidak valid.", issues: body.error.issues });
     return;
@@ -178,23 +178,23 @@ requestsRouter.post("/cuti", async (req, res) => {
 });
 
 // ── Dinas — Jabodetabek perimeter + allowance injection ──────────
-const dinasSchema = z.object({
+const tripSchema = z.object({
   dest: z.string().trim().min(2),
   departDate: dateSchema,
   overnight: z.boolean().optional(),
-  nights: z.number().int().min(1).max(DINAS_MAX_NIGHTS).optional(),
+  nights: z.number().int().min(1).max(TRIP_MAX_NIGHTS).optional(),
   note: z.string().trim().max(500).optional(), // keterangan / trip purpose
 });
 
-requestsRouter.post("/dinas", async (req, res) => {
-  const body = dinasSchema.safeParse(req.body);
+requestsRouter.post("/trip", async (req, res) => {
+  const body = tripSchema.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Data dinas tidak valid.", issues: body.error.issues });
     return;
   }
   const { dest, departDate } = body.data;
-  if (!DINAS_DESTINATIONS.includes(dest)) {
-    res.status(422).json({ error: "Tujuan tidak dikenal.", destinations: DINAS_DESTINATIONS });
+  if (!TRIP_DESTINATIONS.includes(dest)) {
+    res.status(422).json({ error: "Tujuan tidak dikenal.", destinations: TRIP_DESTINATIONS });
     return;
   }
   const jabodetabek = isJabodetabek(dest);
@@ -203,7 +203,7 @@ requestsRouter.post("/dinas", async (req, res) => {
   const nights = overnight ? (body.data.nights ?? 1) : 0;
   const allowance = jabodetabek
     ? { transport: 0, meals: 0, lodging: 0, total: 0 }
-    : dinasAllowance(overnight, nights);
+    : tripAllowance(overnight, nights);
   const returnDate = addDaysStr(departDate, nights);
 
   const detail = jabodetabek
@@ -230,28 +230,28 @@ requestsRouter.post("/dinas", async (req, res) => {
 });
 
 // ── Lembur — daily/weekly caps, 1/173 tariff ─────────────────────
-const lemburSchema = z.object({
+const overtimeSchema = z.object({
   date: dateSchema,
   hours: z
     .number()
-    .min(LEMBUR_STEP_H)
-    .max(LEMBUR_MAX_H)
-    .refine((h) => Number.isInteger(h / LEMBUR_STEP_H), `Kelipatan ${LEMBUR_STEP_H} jam`),
+    .min(OVERTIME_STEP_H)
+    .max(OVERTIME_MAX_H)
+    .refine((h) => Number.isInteger(h / OVERTIME_STEP_H), `Kelipatan ${OVERTIME_STEP_H} jam`),
   note: z.string().trim().max(500).optional(), // keterangan / alasan lembur
 });
 
-requestsRouter.post("/lembur", async (req, res) => {
-  const body = lemburSchema.safeParse(req.body);
+requestsRouter.post("/overtime", async (req, res) => {
+  const body = overtimeSchema.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Data lembur tidak valid.", issues: body.error.issues });
     return;
   }
   const { date, hours } = body.data;
-  if (hours > LEMBUR_DAILY_CAP_H) {
+  if (hours > OVERTIME_DAILY_CAP_H) {
     res.status(422).json({
-      error: `Melebihi cap harian ${LEMBUR_DAILY_CAP_H} jam.`,
-      payableHours: LEMBUR_DAILY_CAP_H,
-      nonPayableHours: +(hours - LEMBUR_DAILY_CAP_H).toFixed(1),
+      error: `Melebihi cap harian ${OVERTIME_DAILY_CAP_H} jam.`,
+      payableHours: OVERTIME_DAILY_CAP_H,
+      nonPayableHours: +(hours - OVERTIME_DAILY_CAP_H).toFixed(1),
     });
     return;
   }
@@ -260,9 +260,9 @@ requestsRouter.post("/lembur", async (req, res) => {
     WHERE user_id = ${req.user!.id} AND kind = 'lembur' AND status != 'Ditolak'
       AND start_date = ${date}
   `;
-  if (existingDay!.h + hours > LEMBUR_DAILY_CAP_H) {
+  if (existingDay!.h + hours > OVERTIME_DAILY_CAP_H) {
     res.status(422).json({
-      error: `Total lembur tanggal itu melebihi cap harian ${LEMBUR_DAILY_CAP_H} jam (sudah ${fmtHours(existingDay!.h)} jam).`,
+      error: `Total lembur tanggal itu melebihi cap harian ${OVERTIME_DAILY_CAP_H} jam (sudah ${fmtHours(existingDay!.h)} jam).`,
       usedHours: existingDay!.h,
     });
     return;
@@ -272,11 +272,11 @@ requestsRouter.post("/lembur", async (req, res) => {
     WHERE user_id = ${req.user!.id} AND kind = 'lembur' AND status != 'Ditolak'
       AND start_date BETWEEN ${weekStart(date)} AND ${weekEnd(date)}
   `;
-  if (week!.h + hours > LEMBUR_WEEKLY_CAP_H) {
+  if (week!.h + hours > OVERTIME_WEEKLY_CAP_H) {
     res.status(422).json({
-      error: `Melebihi kuota mingguan ${LEMBUR_WEEKLY_CAP_H} jam (terpakai ${fmtHours(week!.h)} jam).`,
+      error: `Melebihi kuota mingguan ${OVERTIME_WEEKLY_CAP_H} jam (terpakai ${fmtHours(week!.h)} jam).`,
       weeklyUsedHours: week!.h,
-      weeklyCapHours: LEMBUR_WEEKLY_CAP_H,
+      weeklyCapHours: OVERTIME_WEEKLY_CAP_H,
     });
     return;
   }
@@ -291,8 +291,8 @@ requestsRouter.post("/lembur", async (req, res) => {
     id: created!.id,
     date,
     hours,
-    tariff: LEMBUR_TARIFF,
-    weeklyRemainingHours: +(LEMBUR_WEEKLY_CAP_H - week!.h - hours).toFixed(1),
+    tariff: OVERTIME_TARIFF,
+    weeklyRemainingHours: +(OVERTIME_WEEKLY_CAP_H - week!.h - hours).toFixed(1),
     status: "Menunggu",
   });
 });
