@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Seg } from "@/components/ui/segmented";
 import { Note } from "@/components/ui/note";
 import { Sk } from "@/components/ui/skeleton";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Pager } from "@/components/ui/pagination";
+import { usePaged } from "@/lib/use-paged";
 import { Ic, RIc } from "@/components/icons";
+import { cn } from "@/lib/utils";
 import { useApp, fmtTime, fmtDateLong, greeting } from "@/app/store";
 import { statusChip } from "@/screens/attendance/home";
 import { RequestSheet } from "./request-sheet";
@@ -23,7 +27,7 @@ type Tab = "users" | "requests" | "absences" | "attendance";
 
 /** The selfie endpoint needs the Authorization header, which <img> can't
  *  send — fetch as a blob and display via an object URL. */
-function AuthImg({ src, alt }: { src: string; alt: string }) {
+function AuthImg({ src, alt, className = "w-12 h-12" }: { src: string; alt: string; className?: string }) {
   const [url, setUrl] = React.useState<string | null>(null);
   React.useEffect(() => {
     let alive = true;
@@ -42,8 +46,8 @@ function AuthImg({ src, alt }: { src: string; alt: string }) {
       if (obj) URL.revokeObjectURL(obj);
     };
   }, [src]);
-  if (!url) return <div className="w-12 h-12 rounded-[10px] bg-tint shrink-0" />;
-  return <img src={url} alt={alt} className="w-12 h-12 rounded-[10px] object-cover shrink-0" />;
+  if (!url) return <div className={cn("rounded-[10px] bg-tint shrink-0", className)} />;
+  return <img src={url} alt={alt} className={cn("rounded-[10px] object-cover shrink-0", className)} />;
 }
 
 const POSITIONS: { v: Position; label: string }[] = [
@@ -131,6 +135,143 @@ function ListSkeleton() {
   );
 }
 
+function PhotoBlank() {
+  return (
+    <div className="w-8 h-8 rounded-[8px] bg-tint flex items-center justify-center text-muted shrink-0">
+      <span className="scale-75 flex">{Ic.camera}</span>
+    </div>
+  );
+}
+
+/** Admin requests as a paginated table; rows open the decision sheet. */
+function RequestsTable({ rows, onOpen }: { rows: AdminRequest[]; onOpen: (r: AdminRequest) => void }) {
+  const paged = usePaged(rows, 10);
+  return (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Pengajuan</TableHead>
+            <TableHead>Karyawan</TableHead>
+            <TableHead className="text-right">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {paged.pageItems.map((r) => (
+            <TableRow key={r.id} className="cursor-pointer" onClick={() => onOpen(r)}>
+              <TableCell className="font-bold">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted flex shrink-0">{KIND_ICON[r.kind]}</span>
+                  <span className="truncate max-w-[104px]">{r.title}</span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <span className="block truncate max-w-[120px] text-[12px] font-semibold text-ink">{r.userName}</span>
+                <span className="block truncate max-w-[120px] text-[11px] text-muted">{r.detail}</span>
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <StatusChip status={r.status} />
+                  <span className="text-line2 flex shrink-0">{RIc.chevR}</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <Pager
+        page={paged.page}
+        pageCount={paged.pageCount}
+        rangeStart={paged.rangeStart}
+        rangeEnd={paged.rangeEnd}
+        total={paged.total}
+        onPage={paged.setPage}
+      />
+    </>
+  );
+}
+
+/** Today's attendance sessions as a paginated table, selfie thumbnails inline. */
+function SessionsTable({ sessions }: { sessions: AdminSession[] }) {
+  const paged = usePaged(sessions, 10);
+  return (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Karyawan</TableHead>
+            <TableHead>Masuk</TableHead>
+            <TableHead>Pulang</TableHead>
+            <TableHead className="text-right">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {paged.pageItems.map((s) => {
+            const chip = statusChip(s);
+            return (
+              <TableRow key={s.id}>
+                <TableCell className="font-bold">
+                  <span className="block truncate max-w-[84px]">{s.userName}</span>
+                  {s.shift > 0 && <span className="block text-[10.5px] text-muted font-semibold">Sesi 2</span>}
+                  {s.distanceM !== null && (
+                    <span className="block text-[10.5px] text-muted tabular-nums">±{s.distanceM} m</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-[6px]">
+                    {s.photoIn ? (
+                      <AuthImg src={photoUrl(s.id, "in")} alt={`Masuk ${s.userName}`} className="w-8 h-8" />
+                    ) : (
+                      <PhotoBlank />
+                    )}
+                    <span className="text-[11px] tabular-nums text-ink">
+                      {fmtTime(new Date(s.checkIn))}
+                      {s.late && <span className="block" style={{ color: "var(--danger)" }}>Telat</span>}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {s.checkOut ? (
+                    <div className="flex items-center gap-[6px]">
+                      {s.photoOut ? (
+                        <AuthImg src={photoUrl(s.id, "out")} alt={`Pulang ${s.userName}`} className="w-8 h-8" />
+                      ) : (
+                        <PhotoBlank />
+                      )}
+                      <span className="text-[11px] tabular-nums text-ink">
+                        {fmtTime(new Date(s.checkOut))}
+                        {s.earlyOut && <span className="block" style={{ color: "var(--warn)" }}>Cepat</span>}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-muted">Belum pulang</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <span
+                    className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
+                    style={{ background: chip.bg, color: chip.color }}
+                  >
+                    {chip.label}
+                  </span>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+      <Pager
+        page={paged.page}
+        pageCount={paged.pageCount}
+        rangeStart={paged.rangeStart}
+        rangeEnd={paged.rangeEnd}
+        total={paged.total}
+        onPage={paged.setPage}
+      />
+    </>
+  );
+}
+
 export function AdminPanelScreen() {
   const navigate = useNavigate();
   const { user, logout } = useApp();
@@ -213,8 +354,11 @@ export function AdminPanelScreen() {
   const decidedReqs = requests?.filter((r) => r.status !== "Menunggu") ?? [];
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-60 pb-10">
-      {/* The admin's homepage — identity header with logout, no employee nav. */}
+    <div className="screen bg-bg">
+      {/* Pinned header: identity, hero, and tabs stay put while only the tab
+          content below scrolls. */}
+      <div className="px-6 pt-safe-60 shrink-0">
+        {/* The admin's homepage — identity header with logout, no employee nav. */}
       <div className="flex items-center gap-3 mb-[22px]">
         <div
           className="w-[46px] h-[46px] rounded-full text-white flex items-center justify-center font-extrabold text-[17px] shrink-0"
@@ -265,7 +409,9 @@ export function AdminPanelScreen() {
           ]}
         />
       </div>
+      </div>
 
+      <div className="screen-scroll px-6 pb-10">
       {error && (
         <div className="mb-3">
           <Note tone="danger" icon={Ic.alert}>{error}</Note>
@@ -374,56 +520,11 @@ export function AdminPanelScreen() {
             <Note tone="info" icon={Ic.camera}>
               Presensi hari ini dengan <b>foto selfie</b> dan jarak GPS saat check-in/out.
             </Note>
-            {sessions.length === 0 && (
+            {sessions.length === 0 ? (
               <EmptyNote>Belum ada presensi hari ini — daftar akan terisi begitu tim mulai check-in.</EmptyNote>
+            ) : (
+              <SessionsTable sessions={sessions} />
             )}
-            {sessions.map((s) => (
-              <div key={s.id} className="bg-card border border-line rounded-[16px] px-[15px] py-[13px]">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13.5px] font-extrabold text-ink truncate">
-                      {s.userName}
-                      {s.shift > 0 ? " · Sesi 2" : ""}
-                    </div>
-                    <div className="text-[11.5px] text-muted">
-                      {fmtTime(new Date(s.checkIn))} – {s.checkOut ? fmtTime(new Date(s.checkOut)) : "—"}
-                      {s.distanceM !== null ? ` · ±${s.distanceM} m` : ""}
-                    </div>
-                  </div>
-                  {(() => {
-                    const chip = statusChip(s);
-                    return (
-                      <span
-                        className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
-                        style={{ background: chip.bg, color: chip.color }}
-                      >
-                        {chip.label}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <div className="flex-1 flex items-center gap-2">
-                    {s.photoIn ? (
-                      <AuthImg src={photoUrl(s.id, "in")} alt={`Masuk ${s.userName}`} />
-                    ) : (
-                      <div className="w-12 h-12 rounded-[10px] bg-tint flex items-center justify-center text-muted shrink-0">{Ic.camera}</div>
-                    )}
-                    <span className="text-[11px] text-muted font-semibold">Masuk{s.late ? " · Telat" : ""}</span>
-                  </div>
-                  <div className="flex-1 flex items-center gap-2">
-                    {s.photoOut ? (
-                      <AuthImg src={photoUrl(s.id, "out")} alt={`Pulang ${s.userName}`} />
-                    ) : (
-                      <div className="w-12 h-12 rounded-[10px] bg-tint flex items-center justify-center text-muted shrink-0">{Ic.camera}</div>
-                    )}
-                    <span className="text-[11px] text-muted font-semibold">
-                      {s.checkOut ? `Pulang${s.earlyOut ? " · Cepat" : ""}` : "Belum pulang"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         )
       ) : tab === "absences" ? (
@@ -462,54 +563,23 @@ export function AdminPanelScreen() {
             <EmptyNote>Semua pengajuan sudah ditindaklanjuti — tidak ada yang menunggu.</EmptyNote>
           )}
           {pendingReqs.length > 0 && (
-            <div className="text-[11px] text-muted px-1 mb-1">
-              Ketuk pengajuan untuk melihat detail lengkap sebelum menyetujui / menolak.
-            </div>
-          )}
-          {pendingReqs.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setSheetReq(r)}
-              className="w-full flex items-center gap-3 bg-card border border-line rounded-[16px] px-[15px] py-[13px] text-left cursor-pointer transition-all hover:border-line2 hover:-translate-y-px"
-            >
-              <span className="w-9 h-9 rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">
-                {KIND_ICON[r.kind]}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-extrabold text-ink truncate">{r.title}</div>
-                <div className="text-[11.5px] text-muted truncate">{r.userName} · {r.detail}</div>
+            <>
+              <div className="text-[11px] text-muted px-1 mb-1">
+                Ketuk pengajuan untuk melihat detail lengkap sebelum menyetujui / menolak.
               </div>
-              <StatusChip status={r.status} />
-              <span className="text-line2 flex shrink-0">{RIc.chevR}</span>
-            </button>
-          ))}
+              <RequestsTable rows={pendingReqs} onOpen={setSheetReq} />
+            </>
+          )}
 
           {decidedReqs.length > 0 && (
             <>
               <div className="mt-4 mb-1 text-[13px] font-extrabold text-ink">Riwayat keputusan</div>
-              {decidedReqs.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setSheetReq(r)}
-                  className="w-full flex items-center gap-3 bg-card border border-line rounded-[14px] px-[13px] py-[11px] text-left cursor-pointer hover:border-line2"
-                >
-                  <span className="w-[34px] h-[34px] rounded-[10px] bg-tint text-muted flex items-center justify-center shrink-0">
-                    {KIND_ICON[r.kind]}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-bold text-ink truncate">{r.title}</div>
-                    <div className="text-[11.5px] text-muted truncate">{r.userName} · {r.detail}</div>
-                  </div>
-                  <StatusChip status={r.status} />
-                  <span className="text-line2 flex shrink-0">{RIc.chevR}</span>
-                </button>
-              ))}
+              <RequestsTable rows={decidedReqs} onOpen={setSheetReq} />
             </>
           )}
         </div>
       )}
+      </div>
 
       {sheetReq && (
         <RequestSheet
