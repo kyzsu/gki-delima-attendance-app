@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { ScreenHead } from "@/components/screen-head";
 import { StatusBanner, InfoChip } from "@/components/status-banner";
-import { GeoMap } from "@/components/geo-map";
+import { GeoFenceMap } from "@/components/geo-fence-map";
 import { Ic } from "@/components/icons";
 import { useApp, fmtTime, fmtDateLong, CHURCH } from "@/app/store";
 
@@ -66,7 +66,7 @@ export function CheckSuccessScreen({ mode }: { mode: "in" | "out" }) {
 // ── Out of range (negative) ──────────────────────────────────────
 export function OutOfRangeScreen({ mode }: { mode: "in" | "out" }) {
   const navigate = useNavigate();
-  const { lastDistanceM } = useApp();
+  const { lastDistanceM, lastPos } = useApp();
   const km = lastDistanceM >= 1000 ? `${(lastDistanceM / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} km` : `${lastDistanceM} m`;
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-58 pb-10">
@@ -76,7 +76,7 @@ export function OutOfRangeScreen({ mode }: { mode: "in" | "out" }) {
         close
         to="/home"
       />
-      <GeoMap inRange={false} danger userPos={{ x: "88%", y: "15%" }} />
+      <GeoFenceMap inRange={false} danger user={lastPos} />
       <div className="mt-4">
         <StatusBanner danger>
           Anda berada <b>±{km}</b> dari {CHURCH.name}. Presensi hanya bisa dilakukan dalam radius 50 m.

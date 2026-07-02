@@ -11,7 +11,7 @@ import { checkLocation, useApp } from "@/app/store";
 export function LocatingScreen({ mode }: { mode: "in" | "out" }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { setLastDistanceM, setPendingLoc } = useApp();
+  const { setLastDistanceM, setLastPos, setPendingLoc } = useApp();
   const base = mode === "in" ? "/checkin" : "/checkout";
 
   React.useEffect(() => {
@@ -21,14 +21,18 @@ export function LocatingScreen({ mode }: { mode: "in" | "out" }) {
       const wait = Math.max(0, 2200 - (Date.now() - started));
       setTimeout(() => {
         if (!alive) return;
-        if (res.kind === "gps-off") navigate(`${base}/gps-off`, { replace: true });
-        else if (res.kind === "out-of-range") {
+        if (res.kind === "gps-off") {
+          setLastPos(null);
+          navigate(`${base}/gps-off`, { replace: true });
+        } else if (res.kind === "out-of-range") {
           setLastDistanceM(res.distanceM);
+          setLastPos(res.lat != null && res.lng != null ? { lat: res.lat, lng: res.lng } : null);
           navigate(`${base}/out-of-range`, { replace: true });
         } else {
           // Hand the verified coordinates to the check-in/out API call.
           setPendingLoc({ lat: res.lat, lng: res.lng });
           setLastDistanceM(res.distanceM);
+          setLastPos(res.lat != null && res.lng != null ? { lat: res.lat, lng: res.lng } : null);
           navigate(`${base}/ready`, { replace: true });
         }
       }, wait);
@@ -36,7 +40,7 @@ export function LocatingScreen({ mode }: { mode: "in" | "out" }) {
     return () => {
       alive = false;
     };
-  }, [base, navigate, params, setLastDistanceM, setPendingLoc]);
+  }, [base, navigate, params, setLastDistanceM, setLastPos, setPendingLoc]);
 
   return (
     <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-58 pb-10">

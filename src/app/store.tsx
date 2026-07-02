@@ -151,6 +151,9 @@ interface AppState {
   checkOutAt: Date | null;
   lastDistanceM: number;
   setLastDistanceM: (n: number) => void;
+  /** Live user position from the last locating check — drives the geofence map. */
+  lastPos: Coords | null;
+  setLastPos: (p: Coords | null) => void;
   /** Coordinates captured on the locating screen, sent with check-in/out. */
   setPendingLoc: (loc: Coords) => void;
   log: LogEntry[];
@@ -229,6 +232,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [log, setLog] = React.useState<LogEntry[]>([]);
   const [requests, setRequests] = React.useState<RequestRecord[]>([]);
   const [lastDistanceM, setLastDistanceM] = React.useState(18);
+  const [lastPos, setLastPos] = React.useState<Coords | null>(null);
   const pendingLoc = React.useRef<Coords>({});
 
   const loadSession = React.useCallback(async () => {
@@ -279,6 +283,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     checkOutAt: today?.checkOut ? new Date(today.checkOut) : null,
     lastDistanceM,
     setLastDistanceM,
+    lastPos,
+    setLastPos,
     setPendingLoc: (loc) => {
       pendingLoc.current = loc;
     },
