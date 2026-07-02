@@ -1,6 +1,9 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Sk } from "@/components/ui/skeleton";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Pager } from "@/components/ui/pagination";
+import { usePaged } from "@/lib/use-paged";
 import { TabBar } from "@/components/tab-bar";
 import { Ic, RIc } from "@/components/icons";
 import { toLogEntry } from "@/app/store";
@@ -80,6 +83,7 @@ export function HistoryScreen() {
 
   const loading = data?.month !== month;
   const rows = data?.rows ?? [];
+  const paged = usePaged(rows, 10);
   // One day can hold two sessions (Sunday split shift) — count days attended.
   const daysPresent = new Set(rows.map((r) => r.date)).size;
   const late = rows.filter((r) => r.late).length;
@@ -91,7 +95,14 @@ export function HistoryScreen() {
 
       {/* month stepper — browse any past month */}
       <div className="flex items-center gap-2 mb-[18px]">
-        <Button variant="back" aria-label="Bulan sebelumnya" onClick={() => setMonth(shiftMonth(month, -1))}>
+        <Button
+          variant="back"
+          aria-label="Bulan sebelumnya"
+          onClick={() => {
+            setMonth(shiftMonth(month, -1));
+            paged.setPage(0);
+          }}
+        >
           {Ic.chevL}
         </Button>
         <div className="flex-1 text-center text-[15px] font-extrabold text-ink">{monthLabel(month)}</div>
@@ -100,7 +111,10 @@ export function HistoryScreen() {
           aria-label="Bulan berikutnya"
           disabled={month >= currentMonth}
           className="disabled:opacity-40"
-          onClick={() => setMonth(shiftMonth(month, 1))}
+          onClick={() => {
+            setMonth(shiftMonth(month, 1));
+            paged.setPage(0);
+          }}
         >
           <span className="flex">{RIc.chevR}</span>
         </Button>
@@ -121,29 +135,45 @@ export function HistoryScreen() {
               Tidak ada presensi pada {monthLabel(month)}.
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {rows.map((raw, i) => {
-                const r = toLogEntry(raw);
-                const chip = statusChip(r);
-                return (
-                  <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] p-[14px]">
-                    <span className="w-9 h-9 rounded-[10px] bg-tint text-primary flex items-center justify-center shrink-0">
-                      {Ic.clock}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-bold text-ink">{r.d}</div>
-                      <div className="text-[11.5px] text-muted tabular-nums">{r.in} – {r.out}</div>
-                    </div>
-                    <span
-                      className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
-                      style={{ background: chip.bg, color: chip.color }}
-                    >
-                      {chip.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Jam</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paged.pageItems.map((raw) => {
+                    const r = toLogEntry(raw);
+                    const chip = statusChip(r);
+                    return (
+                      <TableRow key={`${raw.date}-${raw.shift}`}>
+                        <TableCell className="font-bold whitespace-nowrap">{r.d}</TableCell>
+                        <TableCell className="text-muted tabular-nums whitespace-nowrap">{r.in} – {r.out}</TableCell>
+                        <TableCell className="text-right">
+                          <span
+                            className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
+                            style={{ background: chip.bg, color: chip.color }}
+                          >
+                            {chip.label}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <Pager
+                page={paged.page}
+                pageCount={paged.pageCount}
+                rangeStart={paged.rangeStart}
+                rangeEnd={paged.rangeEnd}
+                total={paged.total}
+                onPage={paged.setPage}
+              />
+            </>
           )}
         </>
       )}
