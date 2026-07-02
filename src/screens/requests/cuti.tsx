@@ -1,9 +1,10 @@
 import * as React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { FieldLabel, PseudoField } from "@/components/ui/field";
+import { FieldLabel, PseudoField, DateField } from "@/components/ui/field";
 import { ChipRow } from "@/components/ui/chip-row";
 import { Seg } from "@/components/ui/segmented";
+import { Stepper } from "@/components/ui/stepper";
 import { Switch } from "@/components/ui/switch";
 import { Note } from "@/components/ui/note";
 import { SummaryCard, Row } from "@/components/ui/summary-card";
@@ -68,14 +69,25 @@ export function CutiFormScreen() {
   const { leaveBalance, submitCuti } = useApp();
   const [type, setType] = React.useState<LeaveType>("tahunan");
   const [place, setPlace] = React.useState<Place>("inCity");
+  const [startDate, setStartDate] = React.useState(() => dateStr());
+  const [tahunanDays, setTahunanDays] = React.useState(1);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const start = new Date();
 
+  // Annual leave is variable-length, bounded by the remaining balance;
+  // every other type has a fixed entitlement from Pasal 5.
+  const maxTahunan = Math.max(1, leaveBalance);
   const days =
-    FIXED_DAYS[type] ??
-    (type === "duka_ortu" ? (place === "inCity" ? 2 : 4) : type === "melahirkan" ? MELAHIRKAN_DAYS : 1);
+    type === "tahunan"
+      ? Math.min(tahunanDays, maxTahunan)
+      : FIXED_DAYS[type] ??
+        (type === "duka_ortu" ? (place === "inCity" ? 2 : 4) : type === "melahirkan" ? MELAHIRKAN_DAYS : 1);
   const cutsBalance = type === "tahunan" || type === "izin";
+  const insufficient = cutsBalance && days > leaveBalance;
+  // Parse with an explicit local midnight so the derived end date never
+  // slips a day across time zones.
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = addDays(start, days - 1);
 
   async function submit() {
     if (type === "sakit") {
@@ -87,7 +99,7 @@ export function CutiFormScreen() {
     try {
       await submitCuti({
         type,
-        startDate: dateStr(start),
+        startDate,
         days,
         ...(type === "duka_ortu" ? { place } : {}),
       });
@@ -108,8 +120,14 @@ export function CutiFormScreen() {
               <Note tone="danger" icon={RIc.siren}>{error}</Note>
             </div>
           )}
-          <Button variant="primary" disabled={busy} onClick={submit}>
-            {busy ? "Mengirim…" : type === "sakit" ? "Lanjutkan" : "Kirim Pengajuan"}
+          <Button variant="primary" disabled={busy || insufficient} onClick={submit}>
+            {busy
+              ? "Mengirim…"
+              : insufficient
+                ? "Saldo cuti tidak cukup"
+                : type === "sakit"
+                  ? "Lanjutkan"
+                  : "Kirim Pengajuan"}
           </Button>
           {cutsBalance && type === "izin" && (
             <div className="text-center text-[11.5px] text-muted mt-2">
@@ -127,23 +145,38 @@ export function CutiFormScreen() {
       <div className="flex gap-[10px] mb-4">
         <div className="flex-1">
           <FieldLabel upper>Mulai</FieldLabel>
-          <PseudoField icon={Ic.calendar}>{fmtD(start)}</PseudoField>
+          <DateField icon={Ic.calendar} value={startDate} onChange={setStartDate} min={dateStr()} />
         </div>
         <div className="flex-1">
-          <FieldLabel upper>Selesai</FieldLabel>
-          <PseudoField icon={Ic.calendar}>{fmtD(addDays(start, days - 1))}</PseudoField>
+          <FieldLabel upper hint="otomatis">Selesai</FieldLabel>
+          <PseudoField icon={Ic.calendar}>{fmtD(end)}</PseudoField>
         </div>
       </div>
 
       {type === "tahunan" && (
         <div className="flex flex-col gap-3">
+          <div className="flex justify-between items-center bg-tint rounded-[13px] px-4 py-[11px]">
+            <span className="text-[13px] font-bold text-ink">Jumlah hari</span>
+            <Stepper
+              value={days}
+              suffix=" hari"
+              onDec={() => setTahunanDays((d) => Math.max(1, d - 1))}
+              onInc={() => setTahunanDays((d) => Math.min(maxTahunan, d + 1))}
+            />
+          </div>
           <div className="flex justify-between items-center bg-tint rounded-[13px] px-4 py-[14px]">
             <span className="text-[13px] font-bold text-ink">Saldo cuti tahunan</span>
             <span className="text-[18px] font-extrabold text-primary">{leaveBalance} hari</span>
           </div>
-          <Note tone="info" icon={RIc.file}>
-            Mengajukan <b>1 hari</b> — saldo setelah disetujui menjadi <b>{leaveBalance - 1} hari</b>.
-          </Note>
+          {insufficient ? (
+            <Note tone="danger" icon={Ic.alert}>
+              Saldo cuti tahunan tidak cukup untuk <b>{days} hari</b> (sisa <b>{leaveBalance} hari</b>).
+            </Note>
+          ) : (
+            <Note tone="info" icon={RIc.file}>
+              Mengajukan <b>{days} hari</b> — saldo setelah disetujui menjadi <b>{leaveBalance - days} hari</b>.
+            </Note>
+          )}
         </div>
       )}
       {type === "izin" && (
