@@ -86,7 +86,7 @@ export function HistoryScreen() {
   const onTime = rows.length - late;
 
   return (
-    <div className="flex flex-col flex-1 relative bg-bg px-6 pt-[58px] pb-[100px]">
+    <div className="flex flex-col flex-1 relative bg-bg px-6 pt-safe-58 pb-[100px]">
       <h1 className="text-[24px] font-extrabold text-ink mb-[14px] tracking-[-0.4px]">Riwayat</h1>
 
       {/* month stepper — browse any past month */}

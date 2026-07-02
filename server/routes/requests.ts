@@ -237,6 +237,7 @@ const lemburSchema = z.object({
     .min(LEMBUR_STEP_H)
     .max(LEMBUR_MAX_H)
     .refine((h) => Number.isInteger(h / LEMBUR_STEP_H), `Kelipatan ${LEMBUR_STEP_H} jam`),
+  note: z.string().trim().max(500).optional(), // keterangan / alasan lembur
 });
 
 requestsRouter.post("/lembur", async (req, res) => {
@@ -281,9 +282,9 @@ requestsRouter.post("/lembur", async (req, res) => {
   }
 
   const [created] = await sql<{ id: number }[]>`
-    INSERT INTO requests (user_id, kind, title, detail, start_date, hours)
+    INSERT INTO requests (user_id, kind, title, detail, start_date, hours, note)
     VALUES (${req.user!.id}, 'lembur', ${`Lembur — ${weekdayLong(date)}`},
-            ${`${fmtHours(hours)} jam`}, ${date}, ${hours})
+            ${`${fmtHours(hours)} jam`}, ${date}, ${hours}, ${body.data.note ?? null})
     RETURNING id
   `;
   res.status(201).json({

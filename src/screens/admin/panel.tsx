@@ -213,7 +213,7 @@ export function AdminPanelScreen() {
   const decidedReqs = requests?.filter((r) => r.status !== "Menunggu") ?? [];
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[60px] pb-10">
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-60 pb-10">
       {/* The admin's homepage — identity header with logout, no employee nav. */}
       <div className="flex items-center gap-3 mb-[22px]">
         <div

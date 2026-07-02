@@ -6,6 +6,7 @@ import { Seg } from "@/components/ui/segmented";
 import { Stepper } from "@/components/ui/stepper";
 import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { ScreenHead } from "@/components/screen-head";
+import { FormScreen } from "@/components/form-screen";
 import { SentScaffold } from "@/components/sent-scaffold";
 import { Ic, RIc, bigCheck } from "@/components/icons";
 import { Note } from "@/components/ui/note";
@@ -60,8 +61,21 @@ export function DinasFormScreen() {
   }
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
-      <ScreenHead title="Perjalanan Dinas" sub="Tujuan menentukan tunjangan otomatis." close to="/requests" />
+    <FormScreen
+      head={<ScreenHead title="Perjalanan Dinas" sub="Tujuan menentukan tunjangan otomatis." close to="/requests" />}
+      footer={
+        <>
+          {error && (
+            <div className="mb-3">
+              <Note tone="danger" icon={Ic.alert}>{error}</Note>
+            </div>
+          )}
+          <Button variant="primary" disabled={busy} onClick={submit}>
+            {busy ? "Mengirim…" : inside ? "Kirim Pengajuan" : "Lanjut ke Tunjangan"}
+          </Button>
+        </>
+      }
+    >
       <FieldLabel upper hint="memicu perimeter Jabodetabek">Tujuan</FieldLabel>
       <div className="gki-field mb-[14px] !p-0">
         <span className="text-muted flex pl-[14px]">{Ic.pin}</span>
@@ -118,16 +132,7 @@ export function DinasFormScreen() {
         />
       </div>
 
-      <div className="flex-1 min-h-4" />
-      {error && (
-        <div className="mb-3">
-          <Note tone="danger" icon={Ic.alert}>{error}</Note>
-        </div>
-      )}
-      <Button variant="primary" disabled={busy} onClick={submit}>
-        {busy ? "Mengirim…" : inside ? "Kirim Pengajuan" : "Lanjut ke Tunjangan"}
-      </Button>
-    </div>
+    </FormScreen>
   );
 }
 
@@ -186,8 +191,21 @@ export function DinasAllowanceScreen() {
   }
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
-      <ScreenHead title="Tunjangan Dinas" sub={`${dest} · luar Jabodetabek`} />
+    <FormScreen
+      head={<ScreenHead title="Tunjangan Dinas" sub={`${dest} · luar Jabodetabek`} />}
+      footer={
+        <>
+          {error && (
+            <div className="mb-3">
+              <Note tone="danger" icon={Ic.alert}>{error}</Note>
+            </div>
+          )}
+          <Button variant="primary" disabled={busy} onClick={submit}>
+            {busy ? "Mengirim…" : "Kirim Pengajuan"}
+          </Button>
+        </>
+      }
+    >
       <FieldLabel upper>Status menginap</FieldLabel>
       <div className="mb-[14px]">
         <Seg
@@ -224,16 +242,7 @@ export function DinasAllowanceScreen() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-4" />
-      {error && (
-        <div className="mb-3">
-          <Note tone="danger" icon={Ic.alert}>{error}</Note>
-        </div>
-      )}
-      <Button variant="primary" disabled={busy} onClick={submit}>
-        {busy ? "Mengirim…" : "Kirim Pengajuan"}
-      </Button>
-    </div>
+    </FormScreen>
   );
 }
 

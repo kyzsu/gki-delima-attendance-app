@@ -48,7 +48,7 @@ function LogList({ items }: { items: LogEntry[] }) {
 
 function HomeSkeleton() {
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[60px] pb-10">
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-60 pb-10">
       <div className="flex items-center gap-3 mb-[22px]">
         <Sk w={46} h={46} r={99} />
         <div className="flex-1 flex flex-col gap-[7px]">
@@ -89,7 +89,7 @@ export function HomeScreen() {
   const checkedIn = attendance === "in" && checkInAt;
 
   return (
-    <div className="flex flex-col flex-1 relative bg-bg px-6 pt-[60px] pb-[100px]">
+    <div className="flex flex-col flex-1 relative bg-bg px-6 pt-safe-60 pb-[100px]">
       {/* header */}
       <div className="flex items-center gap-3 mb-[22px]">
         <div

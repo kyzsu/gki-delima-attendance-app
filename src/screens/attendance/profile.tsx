@@ -15,7 +15,7 @@ export function ProfileScreen() {
   const navigate = useNavigate();
   const { user, leaveBalance, logout } = useApp();
   return (
-    <div className="flex flex-col flex-1 relative bg-bg px-6 pt-[58px] pb-[100px]">
+    <div className="flex flex-col flex-1 relative bg-bg px-6 pt-safe-58 pb-[100px]">
       <h1 className="text-[24px] font-extrabold text-ink mb-[18px] tracking-[-0.4px]">Profil</h1>
       <div className="flex flex-col items-center mb-[22px]">
         <div

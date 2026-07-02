@@ -9,7 +9,7 @@ export function Step1Screen() {
   const navigate = useNavigate();
   const { draft, patch } = useSignup();
   return (
-    <div className="flex flex-col flex-1 bg-bg px-7 pt-[58px] pb-11">
+    <div className="flex flex-col flex-1 bg-bg px-7 pt-safe-58 pb-11">
       <StepHead step={1} title="Data diri" sub="Isi sesuai data kepegawaian GKI Delima." backTo="/" />
       <form
         className="contents"

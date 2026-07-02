@@ -45,11 +45,32 @@
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; min-height: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
 body {
   font-family: var(--font-sans);
   background: #efe9ef;
   -webkit-font-smoothing: antialiased;
+  /* Make touches feel native, not web: no grey tap flash, no long-press
+     callout, no rubber-band / pull-to-refresh, no accidental text drag. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  overflow-x: hidden;
 }
+/* …but real text entry stays selectable and editable. */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+img { -webkit-user-drag: none; }
 
 /* Phone-width column on desktop, full screen on mobile */
 .app-shell {
@@ -61,7 +82,23 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: 0 0 60px rgba(60, 10, 60, 0.10);
+  overscroll-behavior: none;
 }
+
+/* ── iOS safe areas — clear the iPhone 15 Dynamic Island and the home
+   indicator. env() is 0 in a normal browser, so these collapse to the
+   designed status-bar spacing and only grow when installed full-screen. */
+.pt-safe-58  { padding-top: max(58px, env(safe-area-inset-top)); }
+.pt-safe-60  { padding-top: max(60px, env(safe-area-inset-top)); }
+.pt-safe-74  { padding-top: max(74px, env(safe-area-inset-top)); }
+.pb-safe-nav { padding-bottom: max(26px, env(safe-area-inset-bottom)); }
+
+/* ── App screen scaffold — header and action button stay put while only
+   the middle content scrolls (native form behaviour on long content). */
+.screen        { display: flex; flex-direction: column; height: 100dvh; }
+.screen-scroll { flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.screen-scroll::-webkit-scrollbar { display: none; }
+.screen-dock   { padding-top: 12px; padding-bottom: max(40px, env(safe-area-inset-bottom)); }
 
 /* ── form field ── */
 .gki-field {

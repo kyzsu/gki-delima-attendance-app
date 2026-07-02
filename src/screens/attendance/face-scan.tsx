@@ -94,7 +94,7 @@ export function FaceScanScreen({ mode }: { mode: "in" | "out" }) {
 
   return (
     <div
-      className="flex flex-col flex-1 relative overflow-hidden items-center text-center px-6 pt-[58px] pb-10"
+      className="flex flex-col flex-1 relative overflow-hidden items-center text-center px-6 pt-safe-58 pb-10"
       style={{ background: "var(--grad-hero)" }}
     >
       <div className="absolute rounded-full" style={{ top: -70, right: -60, width: 220, height: 220, background: "rgba(255,255,255,0.12)", filter: "blur(6px)" }} />

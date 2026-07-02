@@ -39,7 +39,7 @@ export function LocatingScreen({ mode }: { mode: "in" | "out" }) {
   }, [base, navigate, params, setLastDistanceM, setPendingLoc]);
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-58 pb-10">
       <ScreenHead
         title={mode === "in" ? "Presensi Masuk" : "Presensi Pulang"}
         sub="Sedang memeriksa posisi Anda…"

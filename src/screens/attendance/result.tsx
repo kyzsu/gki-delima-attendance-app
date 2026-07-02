@@ -69,7 +69,7 @@ export function OutOfRangeScreen({ mode }: { mode: "in" | "out" }) {
   const { lastDistanceM } = useApp();
   const km = lastDistanceM >= 1000 ? `${(lastDistanceM / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} km` : `${lastDistanceM} m`;
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-58 pb-10">
       <ScreenHead
         title={mode === "in" ? "Presensi Masuk" : "Presensi Pulang"}
         sub="Pastikan Anda berada di area gereja."
@@ -119,7 +119,7 @@ export function GpsOffScreen({ mode }: { mode: "in" | "out" }) {
   const navigate = useNavigate();
   const retry = () => navigate(mode === "in" ? "/checkin/locating" : "/checkout/locating", { replace: true });
   return (
-    <div className="flex flex-col flex-1 bg-bg px-6 pt-[58px] pb-10">
+    <div className="flex flex-col flex-1 bg-bg px-6 pt-safe-58 pb-10">
       <ScreenHead title={mode === "in" ? "Presensi Masuk" : "Presensi Pulang"} close to="/home" />
       <div className="flex-1 flex flex-col items-center justify-center text-center">
         <div className="w-[100px] h-[100px] rounded-full flex items-center justify-center mb-[22px]" style={{ background: "var(--danger-soft)", color: "#D24A66" }}>

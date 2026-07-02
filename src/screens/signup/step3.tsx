@@ -44,7 +44,7 @@ export function Step3Screen() {
   }
 
   return (
-    <div className="flex flex-col flex-1 bg-bg px-7 pt-[58px] pb-11">
+    <div className="flex flex-col flex-1 bg-bg px-7 pt-safe-58 pb-11">
       <StepHead step={3} title="Foto presensi" sub="Digunakan untuk verifikasi wajah saat check-in." backTo="/signup/step-2" />
 
       <div className="flex flex-col items-center gap-[14px] mb-2">

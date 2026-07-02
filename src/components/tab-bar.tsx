@@ -11,7 +11,7 @@ const TABS = [
 export function TabBar() {
   return (
     <nav
-      className="absolute left-0 right-0 bottom-0 flex border-t border-line z-40 px-2 pt-[9px] pb-[26px]"
+      className="fixed left-1/2 -translate-x-1/2 bottom-0 w-full max-w-[430px] flex border-t border-line z-40 px-2 pt-[9px] pb-safe-nav"
       style={{
         background: "rgba(255,255,255,0.92)",
         backdropFilter: "blur(12px)",
