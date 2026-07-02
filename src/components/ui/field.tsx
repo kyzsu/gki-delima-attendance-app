@@ -73,6 +73,37 @@ export function PasswordField(props: Omit<FieldProps, "type" | "trailing" | "ico
   );
 }
 
+/** Native date picker, styled to match .gki-field. `value`/`onChange` use
+ *  a `YYYY-MM-DD` string. Wrapping the input in a <label> lets a tap
+ *  anywhere on the field open the OS date picker. */
+export function DateField({
+  value,
+  onChange,
+  min,
+  max,
+  icon,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  min?: string;
+  max?: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <label className="gki-field cursor-pointer">
+      {icon && <span className="text-muted flex shrink-0">{icon}</span>}
+      <input
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 border-none outline-none bg-transparent text-[14.5px] font-semibold text-ink font-sans min-w-0"
+      />
+    </label>
+  );
+}
+
 /** Read-only display field (.gki-field as PseudoField) */
 export function PseudoField({
   icon,
