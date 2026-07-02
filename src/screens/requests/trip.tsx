@@ -32,10 +32,10 @@ const DEST = [
   { v: "Medan", jabo: false },
 ];
 
-// ── DINAS · 1 — destination triggers the Jabodetabek perimeter ───
-export function DinasFormScreen() {
+// ── TRIP · 1 — destination triggers the Jabodetabek perimeter ───
+export function TripFormScreen() {
   const navigate = useNavigate();
-  const { submitDinas } = useApp();
+  const { submitTrip } = useApp();
   const [dest, setDest] = React.useState("Jakarta");
   const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -46,14 +46,14 @@ export function DinasFormScreen() {
   async function submit() {
     if (!inside) {
       // Carry the keterangan through to the allowance step.
-      navigate("/requests/dinas/allowance", { state: { dest, note } });
+      navigate("/requests/trip/allowance", { state: { dest, note } });
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await submitDinas({ dest, departDate: dateStr(depart), note: note.trim() || undefined });
-      navigate("/requests/dinas/sent", { state: { dest, total: 0, nights: 0 } });
+      await submitTrip({ dest, departDate: dateStr(depart), note: note.trim() || undefined });
+      navigate("/requests/trip/sent", { state: { dest, total: 0, nights: 0 } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
       setBusy(false);
@@ -136,7 +136,7 @@ export function DinasFormScreen() {
   );
 }
 
-// ── DINAS · 2 — automatic allowance injection ────────────────────
+// ── TRIP · 2 — automatic allowance injection ────────────────────
 function AllowRow({ icon, k, sub, v }: { icon: React.ReactNode; k: string; sub: string; v: string }) {
   return (
     <div className="flex items-center gap-3 py-3 border-b border-line">
@@ -152,10 +152,10 @@ function AllowRow({ icon, k, sub, v }: { icon: React.ReactNode; k: string; sub: 
 
 const RATES = { meal: 75000, transport: 150000, lodging: 350000 };
 
-export function DinasAllowanceScreen() {
+export function TripAllowanceScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { submitDinas } = useApp();
+  const { submitTrip } = useApp();
   const dest: string = location.state?.dest ?? "Bandung";
   const note: string = location.state?.note ?? "";
 
@@ -174,14 +174,14 @@ export function DinasAllowanceScreen() {
     setBusy(true);
     setError(null);
     try {
-      const res = await submitDinas({
+      const res = await submitTrip({
         dest,
         departDate: dateStr(new Date()),
         overnight: isOver,
         ...(isOver ? { nights } : {}),
         note: note.trim() || undefined,
       });
-      navigate("/requests/dinas/sent", {
+      navigate("/requests/trip/sent", {
         state: { dest, total: res.allowance.total, nights: res.nights },
       });
     } catch (err) {
@@ -246,8 +246,8 @@ export function DinasAllowanceScreen() {
   );
 }
 
-// ── DINAS · 3 — sent ─────────────────────────────────────────────
-export function DinasSentScreen() {
+// ── TRIP · 3 — sent ─────────────────────────────────────────────
+export function TripSentScreen() {
   const location = useLocation();
   const dest: string = location.state?.dest ?? "Bandung";
   const total: number = location.state?.total ?? 1025000;

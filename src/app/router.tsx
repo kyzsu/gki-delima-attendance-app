@@ -28,19 +28,19 @@ import { ProfileScreen } from "@/screens/attendance/profile";
 import { RequestHubScreen } from "@/screens/requests/hub";
 import { AdminPanelScreen } from "@/screens/admin/panel";
 import {
-  CutiFormScreen,
-  CutiSakitScreen,
-  CutiSentScreen,
-} from "@/screens/requests/cuti";
+  LeaveFormScreen,
+  SickLeaveScreen,
+  LeaveSentScreen,
+} from "@/screens/requests/leave";
 import {
-  DinasFormScreen,
-  DinasAllowanceScreen,
-  DinasSentScreen,
-} from "@/screens/requests/dinas";
+  TripFormScreen,
+  TripAllowanceScreen,
+  TripSentScreen,
+} from "@/screens/requests/trip";
 import {
-  LemburFormScreen,
-  LemburSentScreen,
-} from "@/screens/requests/lembur";
+  OvertimeFormScreen,
+  OvertimeSentScreen,
+} from "@/screens/requests/overtime";
 
 function Shell() {
   return (
@@ -128,14 +128,14 @@ const router = createBrowserRouter([
           { path: "/checkout/gps-off", element: <GpsOffScreen mode="out" /> },
 
           { path: "/requests", element: <RequestHubScreen /> },
-          { path: "/requests/cuti", element: <CutiFormScreen /> },
-          { path: "/requests/cuti/sakit", element: <CutiSakitScreen /> },
-          { path: "/requests/cuti/sent", element: <CutiSentScreen /> },
-          { path: "/requests/dinas", element: <DinasFormScreen /> },
-          { path: "/requests/dinas/allowance", element: <DinasAllowanceScreen /> },
-          { path: "/requests/dinas/sent", element: <DinasSentScreen /> },
-          { path: "/requests/lembur", element: <LemburFormScreen /> },
-          { path: "/requests/lembur/sent", element: <LemburSentScreen /> },
+          { path: "/requests/leave", element: <LeaveFormScreen /> },
+          { path: "/requests/leave/sick", element: <SickLeaveScreen /> },
+          { path: "/requests/leave/sent", element: <LeaveSentScreen /> },
+          { path: "/requests/trip", element: <TripFormScreen /> },
+          { path: "/requests/trip/allowance", element: <TripAllowanceScreen /> },
+          { path: "/requests/trip/sent", element: <TripSentScreen /> },
+          { path: "/requests/overtime", element: <OvertimeFormScreen /> },
+          { path: "/requests/overtime/sent", element: <OvertimeSentScreen /> },
 
           { path: "/history", element: <HistoryScreen /> },
           { path: "/profile", element: <ProfileScreen /> },

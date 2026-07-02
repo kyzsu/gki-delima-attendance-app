@@ -4,9 +4,9 @@ import { RIc } from "@/components/icons";
 import { useApp } from "@/app/store";
 
 const SERVICES = [
-  { to: "/requests/cuti", icon: RIc.calX, title: "Pengajuan Cuti", sub: "Tahunan · Sakit · Darurat · Duka", tone: "var(--primary)" },
-  { to: "/requests/dinas", icon: RIc.plane, title: "Perjalanan Dinas", sub: "Klaim tunjangan transport & inap", tone: "#2C8C6B" },
-  { to: "/requests/lembur", icon: RIc.hourglass, title: "Pengajuan Lembur", sub: "Maks 3 jam/hari · 14 jam/minggu", tone: "#3B7DD8" },
+  { to: "/requests/leave", icon: RIc.calX, title: "Pengajuan Cuti", sub: "Tahunan · Sakit · Darurat · Duka", tone: "var(--primary)" },
+  { to: "/requests/trip", icon: RIc.plane, title: "Perjalanan Dinas", sub: "Klaim tunjangan transport & inap", tone: "#2C8C6B" },
+  { to: "/requests/overtime", icon: RIc.hourglass, title: "Pengajuan Lembur", sub: "Maks 3 jam/hari · 14 jam/minggu", tone: "#3B7DD8" },
 ];
 
 const KIND_ICON = { cuti: RIc.calX, dinas: RIc.plane, lembur: RIc.hourglass } as const;

@@ -189,7 +189,7 @@ export const api = {
 
   requests: () => request<ApiRequest[]>("/requests"),
 
-  submitCuti: (data: {
+  submitLeave: (data: {
     type: LeaveType;
     startDate: string;
     days?: number;
@@ -197,11 +197,11 @@ export const api = {
     doctorNote?: boolean;
   }) =>
     request<{ id: number; type: string; days: number; startDate: string; endDate: string; status: string }>(
-      "/requests/cuti",
+      "/requests/leave",
       { method: "POST", json: data },
     ),
 
-  submitDinas: (data: { dest: string; departDate: string; overnight?: boolean; nights?: number; note?: string }) =>
+  submitTrip: (data: { dest: string; departDate: string; overnight?: boolean; nights?: number; note?: string }) =>
     request<{
       id: number;
       dest: string;
@@ -211,11 +211,11 @@ export const api = {
       nights: number;
       allowance: { transport: number; meals: number; lodging: number; total: number };
       status: string;
-    }>("/requests/dinas", { method: "POST", json: data }),
+    }>("/requests/trip", { method: "POST", json: data }),
 
-  submitLembur: (data: { date: string; hours: number; note?: string }) =>
+  submitOvertime: (data: { date: string; hours: number; note?: string }) =>
     request<{ id: number; date: string; hours: number; tariff: string; weeklyRemainingHours: number; status: string }>(
-      "/requests/lembur",
+      "/requests/overtime",
       { method: "POST", json: data },
     ),
 

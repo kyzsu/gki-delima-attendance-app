@@ -16,7 +16,7 @@ const WEEKLY_CAP = 14;
 const WEEKLY_USED = 4.5;
 
 /** Overtime is requested for the next working day. */
-function lemburDate() {
+function overtimeDate() {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   return d;
@@ -27,7 +27,7 @@ const fmtDay = (d: Date) =>
 
 const fmtH = (h: number) => h.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-function LemburGauge({ hours, cap }: { hours: number; cap: number }) {
+function OvertimeGauge({ hours, cap }: { hours: number; cap: number }) {
   const pct = Math.min(hours / cap, 1);
   const over = hours > cap;
   return (
@@ -48,11 +48,11 @@ function LemburGauge({ hours, cap }: { hours: number; cap: number }) {
   );
 }
 
-// ── LEMBUR · form with real-time cap validation ──────────────────
+// ── OVERTIME · form with real-time cap validation ──────────────────
 // Within cap = positive path; over cap = blocked with non-payable breakdown.
-export function LemburFormScreen() {
+export function OvertimeFormScreen() {
   const navigate = useNavigate();
-  const { submitLembur } = useApp();
+  const { submitOvertime } = useApp();
   const [hours, setHours] = React.useState(2);
   const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -60,14 +60,14 @@ export function LemburFormScreen() {
   const over = hours > DAILY_CAP;
   const payable = Math.min(hours, DAILY_CAP);
   const nonPayable = Math.max(0, hours - DAILY_CAP);
-  const date = lemburDate();
+  const date = overtimeDate();
 
   async function submit() {
     setBusy(true);
     setError(null);
     try {
-      await submitLembur({ date: dateStr(date), hours, note: note.trim() || undefined });
-      navigate("/requests/lembur/sent", { state: { hours, date: date.toISOString() } });
+      await submitOvertime({ date: dateStr(date), hours, note: note.trim() || undefined });
+      navigate("/requests/overtime/sent", { state: { hours, date: date.toISOString() } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
       setBusy(false);
@@ -117,7 +117,7 @@ export function LemburFormScreen() {
         />
       </div>
       <div className="mt-[14px]">
-        <LemburGauge hours={hours} cap={DAILY_CAP} />
+        <OvertimeGauge hours={hours} cap={DAILY_CAP} />
       </div>
 
       <div className="mt-4 flex flex-col gap-[10px]">
@@ -154,11 +154,11 @@ export function LemburFormScreen() {
   );
 }
 
-// ── LEMBUR · sent (awaiting sign-off) ────────────────────────────
-export function LemburSentScreen() {
+// ── OVERTIME · sent (awaiting sign-off) ────────────────────────────
+export function OvertimeSentScreen() {
   const location = useLocation();
   const hours: number = location.state?.hours ?? 2;
-  const date = location.state?.date ? new Date(location.state.date) : lemburDate();
+  const date = location.state?.date ? new Date(location.state.date) : overtimeDate();
   return (
     <SentScaffold
       icon={bigClock}
