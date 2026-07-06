@@ -3,7 +3,6 @@ import { ScreenHead } from "@/components/screen-head";
 import { Sk } from "@/components/ui/skeleton";
 import { useApp, dateStr, fmtDateLong } from "@/app/store";
 import { api, type ApiLogEntry, type ApiRequest } from "@/lib/api";
-import { holidayOn } from "@/lib/holidays";
 
 const WEEKDAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const KIND_LABEL: Record<ApiRequest["kind"], string> = { cuti: "Cuti", dinas: "Dinas", lembur: "Lembur" };
@@ -50,6 +49,7 @@ export function CalendarScreen() {
   const today = dateStr();
   const [month, setMonth] = React.useState(ym(new Date()));
   const [data, setData] = React.useState<{ month: string; rows: ApiLogEntry[] } | null>(null);
+  const [holidays, setHolidays] = React.useState<Record<string, string>>({});
   const [sel, setSel] = React.useState(today);
 
   React.useEffect(() => {
@@ -63,6 +63,20 @@ export function CalendarScreen() {
     };
   }, [month]);
 
+  const year = month.slice(0, 4);
+  React.useEffect(() => {
+    let alive = true;
+    api
+      .holidays(Number(year))
+      .then((r) => {
+        if (alive) setHolidays(Object.fromEntries(r.holidays.map((h) => [h.date, h.name])));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [year]);
+
   const loading = data?.month !== month;
   const rows = React.useMemo(() => (data?.month === month ? data.rows : []), [data, month]);
 
@@ -72,7 +86,7 @@ export function CalendarScreen() {
     const get = (d: string): DayMarks => {
       let m = map.get(d);
       if (!m) {
-        m = { kinds: new Set(), holiday: holidayOn(d), rest: isRestDay(d) };
+        m = { kinds: new Set(), holiday: holidays[d] ?? null, rest: isRestDay(d) };
         map.set(d, m);
       }
       return m;
@@ -90,7 +104,7 @@ export function CalendarScreen() {
       }
     }
     return map;
-  }, [rows, requests, month]);
+  }, [rows, requests, month, holidays]);
 
   const [y, m] = month.split("-").map(Number);
   const startPad = new Date(y!, m! - 1, 1).getDay();

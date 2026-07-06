@@ -3,7 +3,8 @@ import { z } from "zod";
 import { hashPassword, signToken, verifyPassword } from "../auth.js";
 import { sql, type AttendanceRow, type UserRow } from "../db.js";
 import { invalidateUser, requireAuth, publicUser } from "../middleware.js";
-import { AUTO_APPROVE_MS, DEMO_MODE, dateStr, shiftsFor } from "../rules.js";
+import { AUTO_APPROVE_MS, DEMO_MODE, dateStr, minutesOfDay, shiftsFor, toMinutes } from "../rules.js";
+import { holidayName } from "../holidays.js";
 
 export const authRouter = Router();
 
@@ -145,7 +146,15 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   const user = req.user!;
   // Admins don't clock in — no attendance state to report.
   if (user.role === "admin") {
-    res.json({ user: publicUser(user), today: null, todayDone: false, remainingShifts: null, todayShifts: null });
+    res.json({
+      user: publicUser(user),
+      today: null,
+      todayDone: false,
+      remainingShifts: null,
+      todayShifts: null,
+      todayHoliday: null,
+      clockOpen: false,
+    });
     return;
   }
   const date = dateStr();
@@ -153,6 +162,10 @@ authRouter.get("/me", requireAuth, async (req, res) => {
     SELECT * FROM attendance WHERE user_id = ${user.id} AND date = ${date} ORDER BY shift
   `;
   const shifts = shiftsFor(user.position, date);
+  const holiday = await holidayName(date);
+  const lastEnd = shifts.length ? shifts[shifts.length - 1]!.end : null;
+  const afterHours = lastEnd ? minutesOfDay() > toMinutes(lastEnd) : true;
+  const clockOpen = shifts.length > 0 && !holiday && !afterHours;
   const open = sessions.find((s) => !s.check_out);
   // Off-days allow a single "tugas khusus" session.
   const required = Math.max(shifts.length, 1);
@@ -172,5 +185,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
     todayDone,
     remainingShifts: open ? null : Math.max(0, (shifts.length || 1) - sessions.length),
     todayShifts: shifts,
+    todayHoliday: holiday,
+    clockOpen,
   });
 });

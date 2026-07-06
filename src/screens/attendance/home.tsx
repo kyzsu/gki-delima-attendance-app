@@ -126,7 +126,7 @@ function HomeSkeleton() {
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { ready, user, attendance, checkInAt, todayShifts, log } = useApp();
+  const { ready, user, attendance, checkInAt, todayShifts, todayHoliday, clockOpen, log } = useApp();
   const now = useClock();
   const [delayDone, setDelayDone] = React.useState(false);
   React.useEffect(() => {
@@ -190,8 +190,8 @@ export function HomeScreen() {
             <div className="text-[44px] font-extrabold tracking-[-1px] mt-[2px] mb-[10px] tabular-nums">{fmtTime(now)}</div>
             <div className="flex flex-wrap items-center gap-[6px]">
               <HeroPill>
-                {restDay ? Ic.check : Ic.clock}
-                {restDay ? "Libur hari ini" : `Shift ${schedule}`}
+                {clockOpen ? Ic.clock : Ic.check}
+                {todayHoliday ? `Libur — ${todayHoliday}` : restDay ? "Libur hari ini" : `Shift ${schedule}`}
               </HeroPill>
               <HeroPill>
                 <span className="w-[7px] h-[7px] rounded-full bg-white" />
@@ -202,27 +202,40 @@ export function HomeScreen() {
         )}
       </div>
 
-      {/* CTA */}
-      {attendance !== "done" && (
+      {/* CTA — checkout stays available for an open session; check-in only
+          when the shift window is open (workday, not holiday, before end). */}
+      {checkedIn ? (
         <>
-          <Button
-            variant="primary"
-            className="mt-[18px]"
-            onClick={() => navigate(checkedIn ? "/checkout/locating" : "/checkin/locating")}
-          >
-            {checkedIn ? Ic.logout : Ic.login}
-            {checkedIn ? "Presensi Pulang" : "Presensi Masuk"}
+          <Button variant="primary" className="mt-[18px]" onClick={() => navigate("/checkout/locating")}>
+            {Ic.logout}Presensi Pulang
           </Button>
           <div className="flex items-center justify-center gap-[6px] mt-3 text-[12.5px] text-muted font-semibold text-center">
             {Ic.pin}
-            <span>
-              {restDay
-                ? "Hari libur — presensi dicatat sebagai tugas khusus"
-                : "Hanya aktif dalam radius 50 m dari gereja"}
-            </span>
+            <span>Hanya aktif dalam radius 50 m dari gereja</span>
           </div>
         </>
-      )}
+      ) : attendance === "none" && clockOpen ? (
+        <>
+          <Button variant="primary" className="mt-[18px]" onClick={() => navigate("/checkin/locating")}>
+            {Ic.login}Presensi Masuk
+          </Button>
+          <div className="flex items-center justify-center gap-[6px] mt-3 text-[12.5px] text-muted font-semibold text-center">
+            {Ic.pin}
+            <span>Hanya aktif dalam radius 50 m dari gereja</span>
+          </div>
+        </>
+      ) : attendance === "none" ? (
+        <div className="mt-[18px] flex items-center gap-[10px] bg-tint rounded-[16px] px-4 py-[14px] text-[12.5px] text-muted font-semibold">
+          {Ic.pin}
+          <span>
+            {todayHoliday
+              ? `Hari libur nasional — ${todayHoliday}. Tidak ada presensi hari ini.`
+              : restDay
+                ? "Hari libur — tidak ada jadwal kerja hari ini."
+                : "Di luar jam kerja — presensi hari ini sudah ditutup."}
+          </span>
+        </div>
+      ) : null}
 
       {/* quick actions */}
       <div className="flex gap-2 mt-5">
