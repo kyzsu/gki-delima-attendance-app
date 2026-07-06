@@ -158,6 +158,7 @@ export const api = {
       today: ApiToday | null;
       todayDone: boolean;
       remainingShifts: number | null;
+      todayShifts: { start: string; end: string }[] | null;
     }>("/auth/me"),
 
   checkIn: (loc: Coords & { photo?: string }) =>

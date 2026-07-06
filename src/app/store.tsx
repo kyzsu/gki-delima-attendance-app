@@ -149,6 +149,8 @@ interface AppState {
   attendance: "none" | "in" | "done";
   checkInAt: Date | null;
   checkOutAt: Date | null;
+  /** Today's scheduled shift(s) for this position; empty on a day off. */
+  todayShifts: { start: string; end: string }[];
   lastDistanceM: number;
   setLastDistanceM: (n: number) => void;
   /** Live user position from the last locating check — drives the geofence map. */
@@ -229,6 +231,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [apiUser, setApiUser] = React.useState<ApiUser>(GUEST);
   const [today, setToday] = React.useState<ApiToday | null>(null);
   const [todayDone, setTodayDone] = React.useState(false);
+  const [todayShifts, setTodayShifts] = React.useState<{ start: string; end: string }[]>([]);
   const [log, setLog] = React.useState<LogEntry[]>([]);
   const [requests, setRequests] = React.useState<RequestRecord[]>([]);
   const [lastDistanceM, setLastDistanceM] = React.useState(18);
@@ -240,6 +243,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setApiUser(me.user);
     setToday(me.today);
     setTodayDone(me.todayDone);
+    setTodayShifts(me.todayShifts ?? []);
     if (me.user.role === "employee") {
       // Attendance and request endpoints are employee-only.
       const [logRows, reqRows] = await Promise.all([api.attendanceLog(), api.requests()]);
@@ -281,6 +285,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     attendance: today && !today.checkOut ? "in" : todayDone ? "done" : "none",
     checkInAt: today ? new Date(today.checkIn) : null,
     checkOutAt: today?.checkOut ? new Date(today.checkOut) : null,
+    todayShifts,
     lastDistanceM,
     setLastDistanceM,
     lastPos,
