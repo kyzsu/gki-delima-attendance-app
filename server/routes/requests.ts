@@ -42,6 +42,8 @@ function publicRequest(r: RequestRow) {
     status: r.status,
     note: r.note,
     rejectReason: r.reject_reason,
+    startDate: r.start_date,
+    endDate: r.end_date,
     createdAt: r.created_at,
   };
 }

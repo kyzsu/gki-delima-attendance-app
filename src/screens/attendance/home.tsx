@@ -229,7 +229,8 @@ export function HomeScreen() {
         <QuickTile icon={RIc.calX} label="Cuti" tone="var(--primary)" onClick={() => navigate("/requests/leave")} />
         <QuickTile icon={RIc.plane} label="Dinas" tone="#2C8C6B" onClick={() => navigate("/requests/trip")} />
         <QuickTile icon={RIc.hourglass} label="Lembur" tone="#3B7DD8" onClick={() => navigate("/requests/overtime")} />
-        <QuickTile icon={Ic.calendar} label="Riwayat" tone="var(--primary)" onClick={() => navigate("/history")} />
+        <QuickTile icon={Ic.calendar} label="Kalender" tone="#7A3FC0" onClick={() => navigate("/calendar")} />
+        <QuickTile icon={Ic.clock} label="Riwayat" tone="var(--primary)" onClick={() => navigate("/history")} />
       </div>
 
       {/* recent log */}
