@@ -136,6 +136,9 @@ export interface Coords {
 export const api = {
   config: () => request<ApiConfig>("/config"),
 
+  holidays: (year: number) =>
+    request<{ year: number; holidays: { date: string; name: string }[] }>(`/holidays?year=${year}`),
+
   signup: (data: { name: string; nip: string; email: string; phone: string; password: string; agreed: true }) =>
     request<{ id: number; status: string }>("/auth/signup", { method: "POST", json: data }),
 
@@ -161,6 +164,8 @@ export const api = {
       todayDone: boolean;
       remainingShifts: number | null;
       todayShifts: { start: string; end: string }[] | null;
+      todayHoliday: string | null;
+      clockOpen: boolean;
     }>("/auth/me"),
 
   checkIn: (loc: Coords & { photo?: string }) =>

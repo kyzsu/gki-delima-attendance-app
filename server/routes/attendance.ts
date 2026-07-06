@@ -15,6 +15,7 @@ import {
   toMinutes,
   workedMinutes,
 } from "../rules.js";
+import { holidayName } from "../holidays.js";
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireEmployee);
@@ -92,18 +93,29 @@ attendanceRouter.post("/check-in", async (req, res) => {
     return;
   }
 
-  // Pasal 5 ayat (1)–(3): the schedule for this employee's position decides
-  // how many sessions today has. Off-days (Senin) are recorded as
-  // "tugas khusus pelayanan gerejawi" — one session, never late.
+  // Pasal 5 ayat (1)–(3): the position's schedule decides today's sessions.
+  // No clock-in on off-days (Senin) or national holidays, or after the
+  // final shift has ended.
   const shifts = shiftsFor(user.position, today);
-  const special = shifts.length === 0;
+  const holiday = await holidayName(today);
+  if (shifts.length === 0 || holiday) {
+    res.status(422).json({
+      error: holiday ? `Hari libur nasional — ${holiday}.` : "Hari libur — tidak ada jadwal kerja hari ini.",
+      reason: "day-off",
+    });
+    return;
+  }
   const shiftIdx = sessions.length;
-  if (!special && shiftIdx >= shifts.length) {
+  if (shiftIdx >= shifts.length) {
     res.status(409).json({ error: "Semua sesi kerja hari ini sudah tercatat." });
     return;
   }
-  if (special && sessions.length > 0) {
-    res.status(409).json({ error: "Presensi tugas khusus hari ini sudah tercatat." });
+  const lastEnd = shifts[shifts.length - 1]!.end;
+  if (minutesOfDay(new Date()) > toMinutes(lastEnd)) {
+    res.status(422).json({
+      error: `Di luar jam kerja — shift berakhir pukul ${lastEnd.replace(":", ".")}.`,
+      reason: "after-hours",
+    });
     return;
   }
 
@@ -112,10 +124,10 @@ attendanceRouter.post("/check-in", async (req, res) => {
   const { distanceM } = loc as Extract<LocationCheck, { kind: "in-range" }>;
 
   const now = new Date();
-  const late = special ? false : minutesOfDay(now) > toMinutes(shifts[shiftIdx]!.start);
+  const late = minutesOfDay(now) > toMinutes(shifts[shiftIdx]!.start);
   const [created] = await sql<{ id: number }[]>`
     INSERT INTO attendance (user_id, date, shift, check_in, late, special, distance_m)
-    VALUES (${user.id}, ${today}, ${shiftIdx}, ${now}, ${late}, ${special}, ${distanceM})
+    VALUES (${user.id}, ${today}, ${shiftIdx}, ${now}, ${late}, ${false}, ${distanceM})
     RETURNING id
   `;
   const photo = body.data.photo ? decodeDataUrl(body.data.photo) : null;
@@ -123,9 +135,9 @@ attendanceRouter.post("/check-in", async (req, res) => {
   res.status(201).json({
     checkIn: now.toISOString(),
     shift: shiftIdx,
-    shiftStart: special ? null : shifts[shiftIdx]!.start,
+    shiftStart: shifts[shiftIdx]!.start,
     late,
-    special,
+    special: false,
     distanceM,
     photo: !!photo,
   });

@@ -5,6 +5,7 @@ import { attendanceRouter, photosRouter } from "./routes/attendance.js";
 import { requestsRouter } from "./routes/requests.js";
 import { adminRouter } from "./routes/admin.js";
 import { CHURCH, DEMO_MODE, GEOFENCE_RADIUS_M } from "./rules.js";
+import { getHolidays } from "./holidays.js";
 
 export const app = express();
 // Check-in/out selfies arrive as ~100–300 KB base64 data URLs.
@@ -43,6 +44,14 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/config", (_req, res) => {
   res.setHeader("Cache-Control", "public, max-age=0, s-maxage=3600");
   res.json({ church: CHURCH, geofenceRadiusM: GEOFENCE_RADIUS_M, demoMode: DEMO_MODE });
+});
+
+// National holidays for a year (defaults to current). Edge-cached a day.
+app.get("/api/holidays", async (req, res) => {
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const holidays = await getHolidays(year);
+  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=86400");
+  res.json({ year, holidays });
 });
 
 app.use("/api/auth", authRouter);

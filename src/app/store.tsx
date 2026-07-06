@@ -140,6 +140,8 @@ interface AppState {
     name: string;
     initials: string;
     email: string;
+    nip: string;
+    phone: string;
     role: "employee" | "admin";
     position: "tata_usaha" | "sopir" | "koster";
     mustChangePassword: boolean;
@@ -151,6 +153,10 @@ interface AppState {
   checkOutAt: Date | null;
   /** Today's scheduled shift(s) for this position; empty on a day off. */
   todayShifts: { start: string; end: string }[];
+  /** National holiday name for today, or null. */
+  todayHoliday: string | null;
+  /** Whether clock-in is allowed now (workday, not holiday, before shift end). */
+  clockOpen: boolean;
   lastDistanceM: number;
   setLastDistanceM: (n: number) => void;
   /** Live user position from the last locating check — drives the geofence map. */
@@ -232,6 +238,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [today, setToday] = React.useState<ApiToday | null>(null);
   const [todayDone, setTodayDone] = React.useState(false);
   const [todayShifts, setTodayShifts] = React.useState<{ start: string; end: string }[]>([]);
+  const [todayHoliday, setTodayHoliday] = React.useState<string | null>(null);
+  const [clockOpen, setClockOpen] = React.useState(false);
   const [log, setLog] = React.useState<LogEntry[]>([]);
   const [requests, setRequests] = React.useState<RequestRecord[]>([]);
   const [lastDistanceM, setLastDistanceM] = React.useState(18);
@@ -244,6 +252,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setToday(me.today);
     setTodayDone(me.todayDone);
     setTodayShifts(me.todayShifts ?? []);
+    setTodayHoliday(me.todayHoliday);
+    setClockOpen(me.clockOpen);
     if (me.user.role === "employee") {
       // Attendance and request endpoints are employee-only.
       const [logRows, reqRows] = await Promise.all([api.attendanceLog(), api.requests()]);
@@ -274,6 +284,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       name: apiUser.name,
       initials: initials(apiUser.name),
       email: apiUser.email,
+      nip: apiUser.nip,
+      phone: apiUser.phone,
       role: apiUser.role,
       position: apiUser.position,
       mustChangePassword: apiUser.mustChangePassword,
@@ -286,6 +298,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     checkInAt: today ? new Date(today.checkIn) : null,
     checkOutAt: today?.checkOut ? new Date(today.checkOut) : null,
     todayShifts,
+    todayHoliday,
+    clockOpen,
     lastDistanceM,
     setLastDistanceM,
     lastPos,

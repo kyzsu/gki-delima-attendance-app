@@ -6,17 +6,39 @@ import { Pager } from "@/components/ui/pagination";
 import { usePaged } from "@/lib/use-paged";
 import { TabBar } from "@/components/tab-bar";
 import { Ic, RIc } from "@/components/icons";
-import { toLogEntry } from "@/app/store";
+import { useApp, dateStr, fmtTime } from "@/app/store";
 import { api, type ApiLogEntry } from "@/lib/api";
-import { statusChip } from "./home";
+
+type Status = "ontime" | "late" | "early" | "noout" | "absent" | "timeoff" | "holiday" | "dayoff";
+
+const META: Record<Status, { label: string; bg: string; color: string }> = {
+  ontime: { label: "Tepat", bg: "var(--tint2)", color: "var(--primary)" },
+  late: { label: "Telat", bg: "var(--danger-soft)", color: "var(--danger)" },
+  early: { label: "Pulang Cepat", bg: "var(--warn-soft)", color: "var(--warn)" },
+  noout: { label: "Tidak Clock Out", bg: "var(--warn-soft)", color: "var(--warn)" },
+  absent: { label: "Alpa", bg: "var(--danger-soft)", color: "var(--danger)" },
+  timeoff: { label: "Izin / Cuti", bg: "var(--tint)", color: "var(--muted)" },
+  holiday: { label: "Libur Nasional", bg: "var(--danger-soft)", color: "var(--danger)" },
+  dayoff: { label: "Libur", bg: "var(--tint)", color: "var(--muted)" },
+};
+
+interface DayEntry {
+  date: string;
+  status: Status;
+  label: string;
+  time: string;
+}
 
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const isRestDay = (date: string) => new Date(date + "T12:00:00Z").getUTCDay() === 1; // Senin
+const dayLabel = (date: string) =>
+  new Date(date + "T00:00:00").toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "short" });
 
 function shiftMonth(month: string, delta: number) {
   const [y, m] = month.split("-").map(Number);
   return ym(new Date(y!, m! - 1 + delta, 1));
 }
-
 function monthLabel(month: string) {
   const [y, m] = month.split("-").map(Number);
   return new Date(y!, m! - 1, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
@@ -26,44 +48,34 @@ function HistorySkeleton() {
   return (
     <>
       <div className="flex gap-[10px] mb-[18px]">
-        <Sk w="100%" h={72} r={16} style={{ flex: 1 }} />
-        <Sk w="100%" h={72} r={16} style={{ flex: 1 }} />
-        <Sk w="100%" h={72} r={16} style={{ flex: 1 }} />
-      </div>
-      <Sk w={110} h={13} style={{ marginBottom: 12 }} />
-      <div className="flex flex-col gap-2">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="flex items-center gap-3 bg-card border border-line rounded-[14px] p-[14px]">
-            <Sk w={36} h={36} r={10} />
-            <div className="flex-1 flex flex-col gap-[7px]">
-              <Sk w={120} h={12} />
-              <Sk w={80} h={10} />
-            </div>
-            <Sk w={48} h={18} r={99} />
-          </div>
+        {[0, 1, 2, 3].map((i) => (
+          <Sk key={i} w="100%" h={64} r={16} style={{ flex: 1 }} />
         ))}
       </div>
+      <Sk w={110} h={13} style={{ marginBottom: 12 }} />
+      <Sk w="100%" h={220} r={14} />
     </>
   );
 }
 
-function Tile({ label, value }: { label: string; value: string }) {
+function Tile({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="flex-1 bg-card border border-line rounded-[16px] px-3 py-[13px] text-center">
-      <div className="text-[19px] font-extrabold text-primary tabular-nums">{value}</div>
-      <div className="text-[11px] text-muted font-semibold mt-[2px]">{label}</div>
+    <div className="flex-1 bg-card border border-line rounded-[16px] px-2 py-[12px] text-center">
+      <div className="text-[19px] font-extrabold tabular-nums" style={{ color }}>{value}</div>
+      <div className="text-[10.5px] text-muted font-semibold mt-[2px]">{label}</div>
     </div>
   );
 }
 
-// Past months never change — cache them for the session so stepping back
-// and forth is instant. The current month always refetches.
 const monthCache = new Map<string, ApiLogEntry[]>();
 
 export function HistoryScreen() {
+  const { requests } = useApp();
+  const today = dateStr();
   const currentMonth = ym(new Date());
   const [month, setMonth] = React.useState(currentMonth);
   const [data, setData] = React.useState<{ month: string; rows: ApiLogEntry[] } | null>(null);
+  const [holidays, setHolidays] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
     let alive = true;
@@ -73,34 +85,101 @@ export function HistoryScreen() {
         if (!cached && month < currentMonth) monthCache.set(month, rows);
         if (alive) setData({ month, rows });
       })
-      .catch(() => {
-        if (alive) setData({ month, rows: [] });
-      });
+      .catch(() => alive && setData({ month, rows: [] }));
     return () => {
       alive = false;
     };
   }, [month, currentMonth]);
 
+  const year = month.slice(0, 4);
+  React.useEffect(() => {
+    let alive = true;
+    api
+      .holidays(Number(year))
+      .then((r) => alive && setHolidays(Object.fromEntries(r.holidays.map((h) => [h.date, h.name]))))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [year]);
+
   const loading = data?.month !== month;
-  const rows = data?.rows ?? [];
-  const paged = usePaged(rows, 10);
-  // One day can hold two sessions (Sunday split shift) — count days attended.
-  const daysPresent = new Set(rows.map((r) => r.date)).size;
-  const late = rows.filter((r) => r.late).length;
-  const onTime = rows.length - late;
+  const rows = React.useMemo(() => (data?.month === month ? data.rows : []), [data, month]);
+
+  // Classify every elapsed day of the month into one status.
+  const entries = React.useMemo<DayEntry[]>(() => {
+    const byDate = new Map<string, ApiLogEntry[]>();
+    for (const r of rows) {
+      const list = byDate.get(r.date) ?? [];
+      list.push(r);
+      byDate.set(r.date, list);
+    }
+    const [y, m] = month.split("-").map(Number);
+    const daysInMonth = new Date(y!, m!, 0).getDate();
+    const out: DayEntry[] = [];
+    for (let d = daysInMonth; d >= 1; d--) {
+      const date = `${month}-${pad2(d)}`;
+      if (date > today) continue; // future days
+      const sessions = (byDate.get(date) ?? []).sort((a, b) => a.shift - b.shift);
+      let status: Status;
+      let time = "–";
+      if (sessions.length > 0) {
+        const first = sessions[0]!;
+        const last = sessions[sessions.length - 1]!;
+        time = `${fmtTime(new Date(first.checkIn))} – ${last.checkOut ? fmtTime(new Date(last.checkOut)) : "—"}`;
+        status = sessions.some((s) => s.late)
+          ? "late"
+          : sessions.some((s) => !s.checkOut) && date < today
+            ? "noout"
+            : sessions.some((s) => s.earlyOut)
+              ? "early"
+              : "ontime";
+      } else if (holidays[date]) {
+        status = "holiday";
+      } else if (isRestDay(date)) {
+        status = "dayoff";
+      } else if (
+        requests.some(
+          (req) => req.status !== "Ditolak" && req.startDate && date >= req.startDate && date <= (req.endDate ?? req.startDate),
+        )
+      ) {
+        status = "timeoff";
+      } else if (date < today) {
+        status = "absent";
+      } else {
+        continue; // today, workday, not yet clocked — no record
+      }
+      out.push({ date, status, label: dayLabel(date), time });
+    }
+    return out;
+  }, [rows, requests, holidays, month, today]);
+
+  const counts = React.useMemo(() => {
+    const c = { ontime: 0, late: 0, absent: 0, libur: 0 };
+    for (const e of entries) {
+      if (e.status === "ontime" || e.status === "early") c.ontime++;
+      else if (e.status === "late") c.late++;
+      else if (e.status === "absent") c.absent++;
+      else if (e.status === "holiday" || e.status === "dayoff") c.libur++;
+    }
+    return c;
+  }, [entries]);
+
+  // Re-slice the pager against the current entries.
+  const view = usePaged(entries, 10);
 
   return (
     <div className="flex flex-col flex-1 relative bg-bg px-6 pt-safe-58 pb-[100px]">
       <h1 className="text-[24px] font-extrabold text-ink mb-[14px] tracking-[-0.4px]">Riwayat</h1>
 
-      {/* month stepper — browse any past month */}
+      {/* month stepper */}
       <div className="flex items-center gap-2 mb-[18px]">
         <Button
           variant="back"
           aria-label="Bulan sebelumnya"
           onClick={() => {
             setMonth(shiftMonth(month, -1));
-            paged.setPage(0);
+            view.setPage(0);
           }}
         >
           {Ic.chevL}
@@ -113,7 +192,7 @@ export function HistoryScreen() {
           className="disabled:opacity-40"
           onClick={() => {
             setMonth(shiftMonth(month, 1));
-            paged.setPage(0);
+            view.setPage(0);
           }}
         >
           <span className="flex">{RIc.chevR}</span>
@@ -125,14 +204,15 @@ export function HistoryScreen() {
       ) : (
         <>
           <div className="flex gap-[10px] mb-[18px]">
-            <Tile label="Hadir" value={String(daysPresent)} />
-            <Tile label="Tepat waktu" value={String(onTime)} />
-            <Tile label="Telat" value={String(late)} />
+            <Tile label="Tepat" value={counts.ontime} color="var(--primary)" />
+            <Tile label="Telat" value={counts.late} color="var(--danger)" />
+            <Tile label="Alpa" value={counts.absent} color="var(--danger)" />
+            <Tile label="Libur" value={counts.libur} color="var(--muted)" />
           </div>
           <div className="mb-3 text-[13px] font-extrabold text-ink">Sesi presensi</div>
-          {rows.length === 0 ? (
+          {entries.length === 0 ? (
             <div className="text-center text-[13px] text-muted font-semibold bg-tint rounded-[14px] px-4 py-5">
-              Tidak ada presensi pada {monthLabel(month)}.
+              Tidak ada catatan pada {monthLabel(month)}.
             </div>
           ) : (
             <>
@@ -145,19 +225,18 @@ export function HistoryScreen() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paged.pageItems.map((raw) => {
-                    const r = toLogEntry(raw);
-                    const chip = statusChip(r);
+                  {view.pageItems.map((e) => {
+                    const meta = META[e.status];
                     return (
-                      <TableRow key={`${raw.date}-${raw.shift}`}>
-                        <TableCell className="font-bold whitespace-nowrap">{r.d}</TableCell>
-                        <TableCell className="text-muted tabular-nums whitespace-nowrap">{r.in} – {r.out}</TableCell>
+                      <TableRow key={e.date}>
+                        <TableCell className="font-bold whitespace-nowrap">{e.label}</TableCell>
+                        <TableCell className="text-muted tabular-nums whitespace-nowrap">{e.time}</TableCell>
                         <TableCell className="text-right">
                           <span
                             className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
-                            style={{ background: chip.bg, color: chip.color }}
+                            style={{ background: meta.bg, color: meta.color }}
                           >
-                            {chip.label}
+                            {meta.label}
                           </span>
                         </TableCell>
                       </TableRow>
@@ -166,12 +245,12 @@ export function HistoryScreen() {
                 </TableBody>
               </Table>
               <Pager
-                page={paged.page}
-                pageCount={paged.pageCount}
-                rangeStart={paged.rangeStart}
-                rangeEnd={paged.rangeEnd}
-                total={paged.total}
-                onPage={paged.setPage}
+                page={view.page}
+                pageCount={view.pageCount}
+                rangeStart={view.rangeStart}
+                rangeEnd={view.rangeEnd}
+                total={view.total}
+                onPage={view.setPage}
               />
             </>
           )}
