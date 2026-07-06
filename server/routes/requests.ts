@@ -1,10 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
 import { sql, type RequestRow, type UserRow } from "../db.js";
-import { invalidateUser, requireEmployee } from "../middleware.js";
+import { invalidateUser, requireAuth, requireEmployee } from "../middleware.js";
+import { holidayName } from "../holidays.js";
+import { decodeDataUrl, loadRequestAttachment, saveRequestAttachment } from "../photos.js";
 import {
-  TRIP_DESTINATIONS,
   TRIP_MAX_NIGHTS,
+  weekdayOf,
   DUKA_ORTU_MAX_DAYS,
   IZIN_MAX_PER_MONTH,
   IZIN_MAX_PER_YEAR,
@@ -33,7 +35,7 @@ requestsRouter.use(requireEmployee);
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal: YYYY-MM-DD");
 
-function publicRequest(r: RequestRow) {
+function publicRequest(r: RequestRow & { has_attachment?: boolean }) {
   return {
     id: r.id,
     kind: r.kind,
@@ -44,16 +46,33 @@ function publicRequest(r: RequestRow) {
     rejectReason: r.reject_reason,
     startDate: r.start_date,
     endDate: r.end_date,
+    hasAttachment: r.has_attachment ?? false,
     createdAt: r.created_at,
   };
 }
 
 requestsRouter.get("/", async (req, res) => {
-  const rows = await sql<RequestRow[]>`
-    SELECT * FROM requests WHERE user_id = ${req.user!.id} ORDER BY id DESC
+  const rows = await sql<(RequestRow & { has_attachment: boolean })[]>`
+    SELECT r.*, EXISTS(SELECT 1 FROM request_attachments ra WHERE ra.request_id = r.id) AS has_attachment
+    FROM requests r WHERE r.user_id = ${req.user!.id} ORDER BY r.id DESC
   `;
   res.json(rows.map(publicRequest));
 });
+
+/** Leave counts working days only — Senin (weekly day off) and national
+ *  holidays inside the range are not deducted; the end date skips past them. */
+async function leaveEndDate(start: string, workingDays: number): Promise<string> {
+  let count = 0;
+  let end = start;
+  for (let i = 0; i < 366 && count < workingDays; i++) {
+    const date = addDaysStr(start, i);
+    if (weekdayOf(date) === 1) continue; // Senin libur
+    if (await holidayName(date)) continue; // libur nasional
+    count++;
+    end = date;
+  }
+  return end;
+}
 
 // ── Cuti & izin — Pasal 5 ayat (5)–(7) ───────────────────────────
 const leaveSchema = z.object({
@@ -72,7 +91,8 @@ const leaveSchema = z.object({
   startDate: dateSchema,
   days: z.number().int().min(1).optional(),
   place: z.enum(["inCity", "outside"]).optional(), // duka_ortu only
-  doctorNote: z.boolean().optional(), // sakit only
+  doctorNote: z.boolean().optional(), // deprecated — kept for compatibility
+  attachment: z.string().max(3_000_000).optional(), // sakit: doctor's letter photo (data URL)
 });
 
 requestsRouter.post("/leave", async (req, res) => {
@@ -82,7 +102,8 @@ requestsRouter.post("/leave", async (req, res) => {
     return;
   }
   const user = req.user!;
-  const { type, startDate, place, doctorNote } = body.data;
+  const { type, startDate, place } = body.data;
+  const hasNote = type === "sakit" && !!body.data.attachment;
   let days = body.data.days ?? 1;
 
   // Fixed entitlements — ayat (5b)–(5e), (5i) and the 1-day izin (6)/(7).
@@ -145,8 +166,8 @@ requestsRouter.post("/leave", async (req, res) => {
     }
   }
 
-  // Ayat (5a) sakit tanpa surat dokter dan ayat (6) izin memotong saldo.
-  const cutsBalance = leaveCutsBalance(type, doctorNote);
+  // Ayat (6): only izin and annual leave deduct the balance.
+  const cutsBalance = leaveCutsBalance(type);
   if (cutsBalance && days > user.leave_balance) {
     res.status(422).json({
       error: `Saldo cuti tahunan tidak cukup (sisa ${user.leave_balance} hari).`,
@@ -155,19 +176,24 @@ requestsRouter.post("/leave", async (req, res) => {
     return;
   }
 
-  const endDate = addDaysStr(startDate, days - 1);
+  // Working days only — Senin and national holidays don't consume the leave.
+  const endDate = await leaveEndDate(startDate, days);
   const detail =
     type === "sakit"
-      ? `${days} hari · ${doctorNote ? "surat dokter" : "tanpa surat — potong saldo"}`
+      ? `${days} hari · ${hasNote ? "surat dokter terlampir" : "tanpa surat"}`
       : type === "izin"
         ? `${days} hari · dipotong cuti`
         : `${days} hari · mulai ${startDate}`;
   const [created] = await sql<{ id: number }[]>`
     INSERT INTO requests (user_id, kind, title, detail, leave_type, place, doctor_note, start_date, end_date, days)
     VALUES (${user.id}, 'cuti', ${LEAVE_LABEL[type]}, ${detail}, ${type}, ${place ?? null},
-            ${doctorNote ?? null}, ${startDate}, ${endDate}, ${days})
+            ${hasNote}, ${startDate}, ${endDate}, ${days})
     RETURNING id
   `;
+  if (hasNote && body.data.attachment) {
+    const decoded = decodeDataUrl(body.data.attachment);
+    if (decoded) await saveRequestAttachment(created!.id, decoded.mime, decoded.data);
+  }
   res.status(201).json({
     id: created!.id,
     type,
@@ -195,10 +221,7 @@ requestsRouter.post("/trip", async (req, res) => {
     return;
   }
   const { dest, departDate } = body.data;
-  if (!TRIP_DESTINATIONS.includes(dest)) {
-    res.status(422).json({ error: "Tujuan tidak dikenal.", destinations: TRIP_DESTINATIONS });
-    return;
-  }
+  // Destination is free text; the Jabodetabek perimeter is matched by name.
   const jabodetabek = isJabodetabek(dest);
   // Inside the Jabodetabek perimeter: same-day trip, no allowance.
   const overnight = jabodetabek ? false : (body.data.overnight ?? false);
@@ -314,3 +337,20 @@ export async function approveRequest(r: RequestRow) {
     invalidateUser(r.user_id);
   }
 }
+
+// Doctor's-letter attachment for a request — owner or admin. Mounted at
+// /api/request-attachments.
+export const requestAttachmentRouter = Router();
+requestAttachmentRouter.get("/:id", requireAuth, async (req, res) => {
+  const row = await loadRequestAttachment(Number(req.params.id) || 0);
+  if (!row) {
+    res.status(404).json({ error: "Lampiran tidak ditemukan." });
+    return;
+  }
+  if (req.user!.role !== "admin" && req.user!.id !== row.user_id) {
+    res.status(403).json({ error: "Bukan lampiran Anda." });
+    return;
+  }
+  res.setHeader("Cache-Control", "private, max-age=86400, immutable");
+  res.type(row.mime).send(row.data);
+});

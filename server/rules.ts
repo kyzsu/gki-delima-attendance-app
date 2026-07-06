@@ -195,10 +195,10 @@ export const IZIN_MAX_PER_YEAR = 3;
 export const DUKA_ORTU_MAX_DAYS = { inCity: 2, outside: 4 } as const;
 export const MELAHIRKAN_MAX_DAYS = 90;
 
-/** Leave types that deduct the annual balance (sakit only without a
- *  doctor's note — ayat 5a; izin always — ayat 6's "izin dipotong cuti"). */
-export function leaveCutsBalance(type: LeaveType, doctorNote: boolean | null | undefined) {
-  return type === "tahunan" || type === "izin" || (type === "sakit" && !doctorNote);
+/** Leave types that deduct the annual balance. Only annual leave and izin
+ *  do; sick leave never does, with or without an attached doctor's letter. */
+export function leaveCutsBalance(type: LeaveType, _doctorNote?: boolean | null) {
+  return type === "tahunan" || type === "izin";
 }
 
 // ── Trip / business travel ───────────────────────────────────────

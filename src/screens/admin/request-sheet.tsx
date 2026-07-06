@@ -2,7 +2,31 @@ import * as React from "react";
 import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { Ic } from "@/components/icons";
 import { fmtIDR } from "@/lib/utils";
-import type { AdminRequest } from "@/lib/api";
+import { getToken, requestAttachmentUrl, type AdminRequest } from "@/lib/api";
+
+/** Doctor's-letter photo — fetched with the auth header, shown as a blob. */
+function AttachmentImg({ requestId }: { requestId: number }) {
+  const [url, setUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    let obj: string | null = null;
+    fetch(requestAttachmentUrl(requestId), { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((b) => {
+        if (b && alive) {
+          obj = URL.createObjectURL(b);
+          setUrl(obj);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      if (obj) URL.revokeObjectURL(obj);
+    };
+  }, [requestId]);
+  if (!url) return <div className="w-full h-[160px] rounded-[13px] bg-tint mt-3" />;
+  return <img src={url} alt="Surat dokter" className="w-full rounded-[13px] mt-3 max-h-[320px] object-contain bg-tint" />;
+}
 
 function fmtDateStr(s: string | null) {
   if (!s) return "—";
@@ -83,7 +107,7 @@ export function RequestSheet({
               <Row k="Tanggal" v={dateRange(req)} />
               <Row k="Durasi" v={req.days ? `${req.days} hari` : "—"} />
               {req.leaveType === "sakit" && (
-                <Row k="Surat dokter" v={req.doctorNote ? "Terlampir" : "Tidak ada"} />
+                <Row k="Surat dokter" v={req.hasAttachment ? "Terlampir" : "Tidak ada"} />
               )}
               {req.place && <Row k="Lokasi" v={PLACE_LABEL[req.place] ?? req.place} />}
             </>
@@ -108,6 +132,10 @@ export function RequestSheet({
           <Row k="Diajukan" v={fmtDateStr(req.createdAt.slice(0, 10))} />
           <Row k="Status" v={req.status} last />
         </SummaryCard>
+
+        {req.kind === "cuti" && req.leaveType === "sakit" && req.hasAttachment && (
+          <AttachmentImg requestId={req.id} />
+        )}
 
         {req.note && (
           <div className="mt-3 rounded-[13px] bg-tint px-4 py-3">

@@ -5,7 +5,6 @@ import { FieldLabel, PseudoField, DateField } from "@/components/ui/field";
 import { ChipRow } from "@/components/ui/chip-row";
 import { Seg } from "@/components/ui/segmented";
 import { Stepper } from "@/components/ui/stepper";
-import { Switch } from "@/components/ui/switch";
 import { Note } from "@/components/ui/note";
 import { SummaryCard, Row } from "@/components/ui/summary-card";
 import { ScreenHead } from "@/components/screen-head";
@@ -13,7 +12,7 @@ import { FormScreen } from "@/components/form-screen";
 import { SentScaffold } from "@/components/sent-scaffold";
 import { Ic, RIc, bigClock } from "@/components/icons";
 import { useApp, dateStr, fmtDateLong } from "@/app/store";
-import type { LeaveType } from "@/lib/api";
+import { api, type LeaveType } from "@/lib/api";
 
 type Place = "inCity" | "outside";
 
@@ -23,6 +22,45 @@ const addDays = (d: Date, n: number) => {
   x.setDate(x.getDate() + n);
   return x;
 };
+
+/** End date after counting `days` working days from start, skipping Senin and
+ *  national holidays (they don't consume the leave). */
+function workingEnd(start: Date, days: number, holidays: Set<string>): Date {
+  let count = 0;
+  let end = start;
+  for (let i = 0; i < 366 && count < days; i++) {
+    const d = addDays(start, i);
+    if (d.getDay() === 1) continue; // Senin libur
+    if (holidays.has(dateStr(d))) continue; // libur nasional
+    count++;
+    end = d;
+  }
+  return end;
+}
+
+/** Downscale a camera photo to a JPEG data URL small enough to upload. */
+function fileToJpeg(file: File, maxW = 1200): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      URL.revokeObjectURL(url);
+      if (!ctx) return reject(new Error("no ctx"));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("load"));
+    };
+    img.src = url;
+  });
+}
 
 // Pasal 5 ayat (5)–(7) — one chip per permitted-absence reason.
 const LEAVE_OPTS: { v: LeaveType; label: string; icon: React.ReactNode }[] = [
@@ -71,8 +109,21 @@ export function LeaveFormScreen() {
   const [place, setPlace] = React.useState<Place>("inCity");
   const [startDate, setStartDate] = React.useState(() => dateStr());
   const [tahunanDays, setTahunanDays] = React.useState(1);
+  const [holidays, setHolidays] = React.useState<Set<string>>(new Set());
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // National holidays for the leave's year — excluded from the day count.
+  React.useEffect(() => {
+    let alive = true;
+    api
+      .holidays(Number(startDate.slice(0, 4)))
+      .then((r) => alive && setHolidays(new Set(r.holidays.map((h) => h.date))))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [startDate]);
 
   // Annual leave is variable-length, bounded by the remaining balance;
   // every other type has a fixed entitlement from Pasal 5.
@@ -84,10 +135,10 @@ export function LeaveFormScreen() {
         (type === "duka_ortu" ? (place === "inCity" ? 2 : 4) : type === "melahirkan" ? MELAHIRKAN_DAYS : 1);
   const cutsBalance = type === "tahunan" || type === "izin";
   const insufficient = cutsBalance && days > leaveBalance;
-  // Parse with an explicit local midnight so the derived end date never
-  // slips a day across time zones.
+  // End date counts working days only — Senin and national holidays are
+  // skipped (they don't consume the leave), mirroring the server.
   const start = new Date(`${startDate}T00:00:00`);
-  const end = addDays(start, days - 1);
+  const end = workingEnd(start, days, holidays);
 
   async function submit() {
     if (type === "sakit") {
@@ -225,7 +276,7 @@ export function LeaveFormScreen() {
       )}
       {type === "sakit" && (
         <Note tone="info" icon={RIc.heart}>
-          Lampirkan surat dokter pada langkah berikut agar saldo tahunan tidak terpotong.
+          Cuti sakit tidak memotong saldo. Foto surat dokter bisa dilampirkan di langkah berikut (opsional).
         </Note>
       )}
 
@@ -233,20 +284,32 @@ export function LeaveFormScreen() {
   );
 }
 
-// ── LEAVE · 2 — sakit, doctor's note toggle ───────────────────────
+// ── LEAVE · 2 — sakit; optional doctor's-letter photo, never cuts balance ─
 export function SickLeaveScreen() {
   const navigate = useNavigate();
-  const { leaveBalance, submitLeave } = useApp();
-  const [hasNote, setHasNote] = React.useState(false);
+  const { submitLeave } = useApp();
+  const [photo, setPhoto] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
   const today = new Date();
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    try {
+      setPhoto(await fileToJpeg(f));
+    } catch {
+      setError("Gagal membaca foto.");
+    }
+  }
 
   async function submit() {
     setBusy(true);
     setError(null);
     try {
-      await submitLeave({ type: "sakit", startDate: dateStr(today), days: 1, doctorNote: hasNote });
+      await submitLeave({ type: "sakit", startDate: dateStr(today), days: 1, attachment: photo ?? undefined });
       navigate("/requests/leave/sent", { state: { type: "sakit", days: 1 } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
@@ -256,7 +319,7 @@ export function SickLeaveScreen() {
 
   return (
     <FormScreen
-      head={<ScreenHead title="Cuti Sakit" sub="Surat dokter menentukan potongan saldo." />}
+      head={<ScreenHead title="Cuti Sakit" sub="Tidak memotong saldo cuti tahunan." />}
       footer={
         <>
           {error && (
@@ -270,31 +333,51 @@ export function SickLeaveScreen() {
         </>
       }
     >
-      <div className="flex justify-between items-center bg-card border border-line rounded-[15px] px-4 py-[15px] mb-[14px]">
-        <div className="flex-1 pr-3">
-          <div className="text-[13.5px] font-extrabold text-ink">Melampirkan surat dokter?</div>
-          <div className="text-[12px] text-muted mt-[2px] leading-[1.4]">Tanpa surat memotong saldo cuti tahunan.</div>
-        </div>
-        <Switch checked={hasNote} onCheckedChange={setHasNote} label="Surat dokter" />
-      </div>
+      <Note tone="ok" icon={Ic.check}>
+        Cuti sakit <b>tidak memotong</b> saldo cuti tahunan. Melampirkan foto surat dokter bersifat opsional.
+      </Note>
 
-      {hasNote ? (
-        <Note tone="ok" icon={Ic.check}>
-          Surat dokter terlampir. Dicatat sebagai <b>cuti sakit</b> tanpa potongan saldo tahunan.
-        </Note>
-      ) : (
-        <Note tone="danger" icon={Ic.alert}>
-          Tanpa surat dokter — sistem memotong <b>1 hari saldo cuti tahunan</b> (sisa {leaveBalance} → {leaveBalance - 1} hari).
-        </Note>
-      )}
+      <div className="mt-4">
+        <FieldLabel upper>Surat dokter (opsional)</FieldLabel>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={onFile}
+          className="hidden"
+        />
+        {photo ? (
+          <div className="relative rounded-[15px] overflow-hidden border border-line">
+            <img src={photo} alt="Surat dokter" className="w-full max-h-[260px] object-cover" />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="absolute bottom-2 right-2 bg-white/90 text-ink text-[12px] font-bold px-3 py-[6px] rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+            >
+              Ganti foto
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="w-full flex flex-col items-center gap-2 bg-card border border-dashed border-line2 rounded-[15px] px-4 py-6 cursor-pointer"
+          >
+            <span className="w-11 h-11 rounded-full bg-tint text-primary flex items-center justify-center">{Ic.camera}</span>
+            <span className="text-[13px] font-bold text-ink">Foto surat dokter</span>
+            <span className="text-[11.5px] text-muted">Buka kamera & ambil foto surat</span>
+          </button>
+        )}
+      </div>
 
       <div className="mt-5">
         <FieldLabel upper>Ringkasan</FieldLabel>
         <SummaryCard>
           <Row k="Jenis" v="Cuti Sakit" />
           <Row k="Tanggal" v={fmtDateLong(today)} />
-          <Row k="Surat dokter" v={hasNote ? "Terlampir" : "Tidak ada"} />
-          <Row k="Potong saldo tahunan" v={hasNote ? "Tidak" : "1 hari"} last />
+          <Row k="Surat dokter" v={photo ? "Terlampir" : "Tidak ada"} />
+          <Row k="Potong saldo tahunan" v="Tidak" last />
         </SummaryCard>
       </div>
 

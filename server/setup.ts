@@ -37,6 +37,11 @@ async function main() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested_at TIMESTAMPTZ;
     ALTER TABLE requests ADD COLUMN IF NOT EXISTS reject_reason TEXT;
     ALTER TABLE requests ADD COLUMN IF NOT EXISTS note TEXT;
+    CREATE TABLE IF NOT EXISTS request_attachments (
+      request_id INT PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE,
+      mime TEXT NOT NULL,
+      data BYTEA NOT NULL
+    );
   `);
 
   const [admin] = await sql`SELECT id FROM users WHERE email = ${ADMIN_EMAIL.toLowerCase()}`;
