@@ -23,6 +23,7 @@ import {
   GpsOffScreen,
 } from "@/screens/attendance/result";
 import { HistoryScreen } from "@/screens/attendance/history";
+import { CalendarScreen } from "@/screens/attendance/calendar";
 import { ProfileScreen } from "@/screens/attendance/profile";
 
 import { RequestHubScreen } from "@/screens/requests/hub";
@@ -138,6 +139,7 @@ const router = createBrowserRouter([
           { path: "/requests/overtime/sent", element: <OvertimeSentScreen /> },
 
           { path: "/history", element: <HistoryScreen /> },
+          { path: "/calendar", element: <CalendarScreen /> },
           { path: "/profile", element: <ProfileScreen /> },
         ],
       },

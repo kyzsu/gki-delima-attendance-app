@@ -102,6 +102,8 @@ export interface ApiRequest {
   status: "Menunggu" | "Disetujui" | "Ditolak";
   note: string | null;
   rejectReason: string | null;
+  startDate: string | null;
+  endDate: string | null;
   createdAt: string;
 }
 
