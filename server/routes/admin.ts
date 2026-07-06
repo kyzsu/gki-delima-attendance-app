@@ -79,15 +79,16 @@ adminRouter.post("/users/:id/position", async (req, res) => {
 
 adminRouter.get("/requests", async (req, res) => {
   const status = req.query.status;
-  type Row = RequestRow & { user_name: string };
+  type Row = RequestRow & { user_name: string; has_attachment: boolean };
+  const attach = sql`EXISTS(SELECT 1 FROM request_attachments ra WHERE ra.request_id = r.id) AS has_attachment`;
   const rows =
     typeof status === "string"
       ? await sql<Row[]>`
-          SELECT r.*, u.name AS user_name FROM requests r
+          SELECT r.*, u.name AS user_name, ${attach} FROM requests r
           JOIN users u ON u.id = r.user_id
           WHERE r.status = ${status} ORDER BY r.id DESC`
       : await sql<Row[]>`
-          SELECT r.*, u.name AS user_name FROM requests r
+          SELECT r.*, u.name AS user_name, ${attach} FROM requests r
           JOIN users u ON u.id = r.user_id
           ORDER BY r.id DESC`;
   res.json(
@@ -113,6 +114,7 @@ adminRouter.get("/requests", async (req, res) => {
       hours: r.hours,
       note: r.note,
       rejectReason: r.reject_reason,
+      hasAttachment: r.has_attachment ?? false,
     })),
   );
 });

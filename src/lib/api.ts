@@ -104,6 +104,7 @@ export interface ApiRequest {
   rejectReason: string | null;
   startDate: string | null;
   endDate: string | null;
+  hasAttachment: boolean;
   createdAt: string;
 }
 
@@ -203,6 +204,7 @@ export const api = {
     days?: number;
     place?: "inCity" | "outside";
     doctorNote?: boolean;
+    attachment?: string;
   }) =>
     request<{ id: number; type: string; days: number; startDate: string; endDate: string; status: string }>(
       "/requests/leave",
@@ -286,3 +288,6 @@ export interface AdminSession {
 /** Selfie endpoint (requires the Authorization header — fetch as a blob). */
 export const photoUrl = (attendanceId: number, kind: "in" | "out") =>
   `/api/photos/${attendanceId}/${kind}`;
+
+/** Doctor's-letter attachment for a request (owner or admin, needs the token). */
+export const requestAttachmentUrl = (requestId: number) => `/api/request-attachments/${requestId}`;

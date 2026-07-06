@@ -2,7 +2,7 @@ import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import { authRouter } from "./routes/auth.js";
 import { attendanceRouter, photosRouter } from "./routes/attendance.js";
-import { requestsRouter } from "./routes/requests.js";
+import { requestsRouter, requestAttachmentRouter } from "./routes/requests.js";
 import { adminRouter } from "./routes/admin.js";
 import { CHURCH, DEMO_MODE, GEOFENCE_RADIUS_M } from "./rules.js";
 import { getHolidays } from "./holidays.js";
@@ -58,6 +58,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/photos", photosRouter);
 app.use("/api/requests", requestsRouter);
+app.use("/api/request-attachments", requestAttachmentRouter);
 app.use("/api/admin", adminRouter);
 
 app.use((_req, res) => {

@@ -35,3 +35,22 @@ export async function loadPhoto(attendanceId: number, kind: "in" | "out") {
   `;
   return row;
 }
+
+// Request attachment (e.g. the doctor's letter photo for a sick leave).
+export async function saveRequestAttachment(requestId: number, mime: string, data: Buffer) {
+  await sql`
+    INSERT INTO request_attachments (request_id, mime, data)
+    VALUES (${requestId}, ${mime}, ${data})
+    ON CONFLICT (request_id) DO UPDATE SET mime = EXCLUDED.mime, data = EXCLUDED.data
+  `;
+}
+
+export async function loadRequestAttachment(requestId: number) {
+  const [row] = await sql<{ mime: string; data: Buffer; user_id: number }[]>`
+    SELECT ra.mime, ra.data, r.user_id
+    FROM request_attachments ra
+    JOIN requests r ON r.id = ra.request_id
+    WHERE ra.request_id = ${requestId}
+  `;
+  return row;
+}

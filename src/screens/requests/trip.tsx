@@ -20,27 +20,21 @@ const addDays = (d: Date, n: number) => {
   return x;
 };
 
-const DEST = [
-  { v: "Jakarta", jabo: true },
-  { v: "Bogor", jabo: true },
-  { v: "Depok", jabo: true },
-  { v: "Tangerang", jabo: true },
-  { v: "Bekasi", jabo: true },
-  { v: "Bandung", jabo: false },
-  { v: "Semarang", jabo: false },
-  { v: "Surabaya", jabo: false },
-  { v: "Medan", jabo: false },
-];
+const JABODETABEK = ["Jakarta", "Bogor", "Depok", "Tangerang", "Bekasi"];
+const DEST_SUGGESTIONS = [...JABODETABEK, "Bandung", "Semarang", "Surabaya", "Medan"];
+const inJabodetabek = (dest: string) =>
+  JABODETABEK.some((c) => c.toLowerCase() === dest.trim().toLowerCase());
 
-// ── TRIP · 1 — destination triggers the Jabodetabek perimeter ───
+// ── TRIP · 1 — destination is free text; the Jabodetabek perimeter is
+// matched by name ───────────────────────────────────────────────
 export function TripFormScreen() {
   const navigate = useNavigate();
   const { submitTrip } = useApp();
-  const [dest, setDest] = React.useState("Jakarta");
+  const [dest, setDest] = React.useState("");
   const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const inside = DEST.find((d) => d.v === dest)!.jabo;
+  const inside = inJabodetabek(dest);
   const depart = new Date();
 
   async function submit() {
@@ -52,7 +46,7 @@ export function TripFormScreen() {
     setBusy(true);
     setError(null);
     try {
-      await submitTrip({ dest, departDate: dateStr(depart), note: note.trim() || undefined });
+      await submitTrip({ dest: dest.trim(), departDate: dateStr(depart), note: note.trim() || undefined });
       navigate("/requests/trip/sent", { state: { dest, total: 0, nights: 0 } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
@@ -70,26 +64,27 @@ export function TripFormScreen() {
               <Note tone="danger" icon={Ic.alert}>{error}</Note>
             </div>
           )}
-          <Button variant="primary" disabled={busy} onClick={submit}>
+          <Button variant="primary" disabled={busy || !dest.trim()} onClick={submit}>
             {busy ? "Mengirim…" : inside ? "Kirim Pengajuan" : "Lanjut ke Tunjangan"}
           </Button>
         </>
       }
     >
-      <FieldLabel upper hint="memicu perimeter Jabodetabek">Tujuan</FieldLabel>
-      <div className="gki-field mb-[14px] !p-0">
-        <span className="text-muted flex pl-[14px]">{Ic.pin}</span>
-        <select
+      <FieldLabel upper hint="ketik kota tujuan">Tujuan</FieldLabel>
+      <div className="gki-field mb-[14px]">
+        <span className="text-muted flex shrink-0">{Ic.pin}</span>
+        <input
+          list="trip-dest"
           value={dest}
           onChange={(e) => setDest(e.target.value)}
-          className="flex-1 border-none outline-none bg-transparent text-[14.5px] font-sans text-ink font-semibold py-[13px] pr-[14px] pl-2 appearance-none cursor-pointer"
-        >
-          {DEST.map((d) => (
-            <option key={d.v} value={d.v}>
-              {d.v}{d.jabo ? " (Jabodetabek)" : ""}
-            </option>
+          placeholder="cth. Bandung"
+          className="flex-1 border-none outline-none bg-transparent text-[14.5px] font-sans text-ink font-semibold min-w-0 placeholder:text-muted/70"
+        />
+        <datalist id="trip-dest">
+          {DEST_SUGGESTIONS.map((s) => (
+            <option key={s} value={s} />
           ))}
-        </select>
+        </datalist>
       </div>
 
       <div className="flex gap-[10px] mb-[14px]">
@@ -103,23 +98,25 @@ export function TripFormScreen() {
         </div>
       </div>
 
-      <div
-        className="flex gap-3 items-center rounded-[14px] px-[15px] py-[14px]"
-        style={{
-          background: inside ? "var(--tint)" : "var(--tint2)",
-          border: inside ? "1px solid var(--line)" : "1px solid var(--primary)",
-        }}
-      >
-        <span className="flex" style={{ color: inside ? "var(--muted)" : "var(--primary)" }}>{RIc.route}</span>
-        <div className="flex-1">
-          <div className="text-[13px] font-extrabold" style={{ color: inside ? "var(--muted)" : "var(--primary)" }}>
-            {inside ? "Dalam Jabodetabek" : "Luar kota — luar Jabodetabek"}
-          </div>
-          <div className="text-[11.5px] text-muted mt-[2px] leading-[1.4]">
-            {inside ? "Tidak memicu tunjangan luar kota." : "Memicu injeksi tunjangan otomatis."}
+      {dest.trim() && (
+        <div
+          className="flex gap-3 items-center rounded-[14px] px-[15px] py-[14px]"
+          style={{
+            background: inside ? "var(--tint)" : "var(--tint2)",
+            border: inside ? "1px solid var(--line)" : "1px solid var(--primary)",
+          }}
+        >
+          <span className="flex" style={{ color: inside ? "var(--muted)" : "var(--primary)" }}>{RIc.route}</span>
+          <div className="flex-1">
+            <div className="text-[13px] font-extrabold" style={{ color: inside ? "var(--muted)" : "var(--primary)" }}>
+              {inside ? "Dalam Jabodetabek" : "Luar kota — luar Jabodetabek"}
+            </div>
+            <div className="text-[11.5px] text-muted mt-[2px] leading-[1.4]">
+              {inside ? "Tidak memicu tunjangan luar kota." : "Memicu injeksi tunjangan otomatis."}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="mt-[14px]">
         <FieldLabel upper hint="tujuan perjalanan">Keterangan</FieldLabel>
@@ -250,7 +247,6 @@ export function TripAllowanceScreen() {
 export function TripSentScreen() {
   const location = useLocation();
   const dest: string = location.state?.dest ?? "Bandung";
-  const total: number = location.state?.total ?? 1025000;
   const nights: number = location.state?.nights ?? 2;
   return (
     <SentScaffold
@@ -261,7 +257,6 @@ export function TripSentScreen() {
       <SummaryCard>
         <Row k="Tujuan" v={dest} />
         <Row k="Durasi" v={nights > 0 ? `${nights + 1} hari · ${nights} malam` : "1 hari"} />
-        <Row k="Total tunjangan" v={total > 0 ? fmtIDR(total) : "—"} />
         <Row k="Status" v="Menunggu persetujuan" last />
       </SummaryCard>
     </SentScaffold>
