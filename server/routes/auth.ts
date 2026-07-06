@@ -145,7 +145,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   const user = req.user!;
   // Admins don't clock in — no attendance state to report.
   if (user.role === "admin") {
-    res.json({ user: publicUser(user), today: null, todayDone: false, remainingShifts: null });
+    res.json({ user: publicUser(user), today: null, todayDone: false, remainingShifts: null, todayShifts: null });
     return;
   }
   const date = dateStr();
@@ -171,5 +171,6 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       : null,
     todayDone,
     remainingShifts: open ? null : Math.max(0, (shifts.length || 1) - sessions.length),
+    todayShifts: shifts,
   });
 });
