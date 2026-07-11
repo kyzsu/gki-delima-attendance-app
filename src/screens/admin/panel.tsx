@@ -202,6 +202,7 @@ function SessionsTable({ sessions }: { sessions: AdminSession[] }) {
             <TableHead>Karyawan</TableHead>
             <TableHead>Masuk</TableHead>
             <TableHead>Pulang</TableHead>
+            <TableHead>Istirahat</TableHead>
             <TableHead className="text-right">Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -245,6 +246,19 @@ function SessionsTable({ sessions }: { sessions: AdminSession[] }) {
                     </div>
                   ) : (
                     <span className="text-[11px] text-muted">Belum pulang</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {s.breakStart && s.breakEnd ? (
+                    <span className="text-[11px] tabular-nums text-ink">
+                      {fmtTime(new Date(s.breakStart))}–{fmtTime(new Date(s.breakEnd))}
+                    </span>
+                  ) : s.breakStart ? (
+                    <span className="text-[11px] font-semibold" style={{ color: "var(--warn)" }}>
+                      Sejak {fmtTime(new Date(s.breakStart))}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-muted">—</span>
                   )}
                 </TableCell>
                 <TableCell className="text-right">

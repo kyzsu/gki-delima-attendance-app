@@ -146,12 +146,19 @@ export const toMinutes = (hm: string) => {
 export const BREAK_AFTER_MIN = 4 * 60;
 export const BREAK_MIN = 60;
 
-export function workedMinutes(rawMinutes: number, position: Position) {
-  if (position !== "sopir" && rawMinutes > BREAK_AFTER_MIN) {
-    return Math.max(0, rawMinutes - BREAK_MIN);
-  }
+/** `breakMinutes` is the real istirahat duration for this shift, when one was
+ *  logged via the break feature — it replaces the flat 60-min assumption.
+ *  Without one, ayat (4)'s default (60 min after 4 continuous hours) applies. */
+export function workedMinutes(rawMinutes: number, position: Position, breakMinutes: number | null = null) {
+  if (position === "sopir") return rawMinutes;
+  if (breakMinutes !== null) return Math.max(0, rawMinutes - breakMinutes);
+  if (rawMinutes > BREAK_AFTER_MIN) return Math.max(0, rawMinutes - BREAK_MIN);
   return rawMinutes;
 }
+
+/** Istirahat (break) clock in/out is offered to every position except Sopir,
+ *  whose break follows the assignment (ayat 2's exception). */
+export const canTakeBreak = (position: Position) => position !== "sopir";
 
 // ── Leave (cuti & izin) — Pasal 5 ayat (5)–(7) ───────────────────────────
 export type LeaveType =

@@ -108,6 +108,11 @@ export interface ApiRequest {
   createdAt: string;
 }
 
+export interface ApiBreak {
+  breakStart: string;
+  breakEnd: string | null;
+}
+
 export interface ApiConfig {
   church: { name: string; address: string; lat: number; lng: number };
   geofenceRadiusM: number;
@@ -196,6 +201,21 @@ export const api = {
   attendanceLog: (month?: string) =>
     request<ApiLogEntry[]>(`/attendance/log${month ? `?month=${month}` : ""}`),
 
+  breakToday: () =>
+    request<{ date: string; break: ApiBreak | null; allowed: boolean }>("/breaks/today"),
+
+  breakStart: (loc: Coords) =>
+    request<{ breakStart: string; breakEnd: null; distanceM: number }>("/breaks/start", {
+      method: "POST",
+      json: loc,
+    }),
+
+  breakEnd: (loc: Coords) =>
+    request<{ breakStart: string; breakEnd: string; minutes: number; distanceM: number }>("/breaks/end", {
+      method: "POST",
+      json: loc,
+    }),
+
   requests: () => request<ApiRequest[]>("/requests"),
 
   submitLeave: (data: {
@@ -283,6 +303,8 @@ export interface AdminSession {
   distanceM: number | null;
   photoIn: boolean;
   photoOut: boolean;
+  breakStart: string | null;
+  breakEnd: string | null;
 }
 
 /** Selfie endpoint (requires the Authorization header — fetch as a blob). */

@@ -1,67 +1,13 @@
 import { Router } from "express";
-import type { Response } from "express";
-import { z } from "zod";
-import { sql, type AttendanceRow } from "../db.js";
+import { sql, type AttendanceRow, type BreakRow } from "../db.js";
 import { requireAuth, requireEmployee } from "../middleware.js";
 import { decodeDataUrl, loadPhoto, savePhoto } from "../photos.js";
-import {
-  CHURCH,
-  DEMO_MODE,
-  GEOFENCE_RADIUS_M,
-  dateStr,
-  haversineM,
-  minutesOfDay,
-  shiftsFor,
-  toMinutes,
-  workedMinutes,
-} from "../rules.js";
+import { checkLocation, rejectLocation, locationSchema, type LocationCheck } from "../geo.js";
+import { dateStr, minutesOfDay, shiftsFor, toMinutes, workedMinutes } from "../rules.js";
 import { holidayName } from "../holidays.js";
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireEmployee);
-
-const locationSchema = z.object({
-  lat: z.number().min(-90).max(90).optional(),
-  lng: z.number().min(-180).max(180).optional(),
-  // Demo-only testing hook, mirroring the frontend's ?force= params.
-  force: z.enum(["far", "gpsoff"]).optional(),
-  // Selfie captured by the face-scan screen (JPEG data URL).
-  photo: z.string().max(3_000_000).optional(),
-});
-
-type LocationCheck =
-  | { kind: "in-range"; distanceM: number }
-  | { kind: "out-of-range"; distanceM: number }
-  | { kind: "gps-off" };
-
-function checkLocation(input: z.infer<typeof locationSchema>): LocationCheck {
-  if (DEMO_MODE && input.force === "far") return { kind: "out-of-range", distanceM: 1200 };
-  if (DEMO_MODE && input.force === "gpsoff") return { kind: "gps-off" };
-  if (input.lat === undefined || input.lng === undefined) {
-    return DEMO_MODE ? { kind: "in-range", distanceM: 18 } : { kind: "gps-off" };
-  }
-  const d = Math.round(haversineM(input.lat, input.lng, CHURCH.lat, CHURCH.lng));
-  if (DEMO_MODE) return { kind: "in-range", distanceM: d };
-  return d <= GEOFENCE_RADIUS_M
-    ? { kind: "in-range", distanceM: d }
-    : { kind: "out-of-range", distanceM: d };
-}
-
-function rejectLocation(res: Response, loc: LocationCheck) {
-  if (loc.kind === "gps-off") {
-    res.status(422).json({ error: "GPS tidak aktif.", reason: "gps-off" });
-    return true;
-  }
-  if (loc.kind === "out-of-range") {
-    res.status(422).json({
-      error: `Di luar jangkauan — ${loc.distanceM} m dari ${CHURCH.name} (maks ${GEOFENCE_RADIUS_M} m).`,
-      reason: "out-of-range",
-      distanceM: loc.distanceM,
-    });
-    return true;
-  }
-  return false;
-}
 
 function publicSession(r: AttendanceRow) {
   return {
@@ -160,14 +106,35 @@ attendanceRouter.post("/check-out", async (req, res) => {
     res.status(409).json({ error: "Belum check-in hari ini." });
     return;
   }
+  // A break must be closed out before the day can be signed off.
+  const [brk] = await sql<BreakRow[]>`
+    SELECT * FROM breaks WHERE user_id = ${user.id} AND date = ${today}
+  `;
+  if (brk && !brk.break_end) {
+    res.status(409).json({ error: "Selesaikan istirahat terlebih dahulu sebelum presensi pulang." });
+    return;
+  }
+
   const loc = checkLocation(body.data);
   if (rejectLocation(res, loc)) return;
   const { distanceM } = loc as Extract<LocationCheck, { kind: "in-range" }>;
 
   const now = new Date();
   const rawMin = Math.max(0, Math.round((now.getTime() - new Date(open.check_in).getTime()) / 60000));
-  // Pasal 5 ayat (4): 1 hour break after 4 consecutive hours (except Sopir).
-  const netMin = workedMinutes(rawMin, user.position);
+  // Real istirahat duration replaces the ayat (4) flat 60-min assumption —
+  // but only when the break falls fully inside *this* shift's window (a
+  // Sunday Tata Usaha split shift can close out twice with one break logged
+  // for the day; it's attributed to whichever session it actually happened in).
+  let breakMinutes: number | null = null;
+  if (brk?.break_end) {
+    const bs = new Date(brk.break_start).getTime();
+    const be = new Date(brk.break_end).getTime();
+    const ci = new Date(open.check_in).getTime();
+    if (bs >= ci && be <= now.getTime()) {
+      breakMinutes = Math.max(0, Math.round((be - bs) / 60000));
+    }
+  }
+  const netMin = workedMinutes(rawMin, user.position, breakMinutes);
   // Pulang cepat: out before the shift's scheduled end (n/a for tugas khusus).
   const shifts = shiftsFor(user.position, today);
   const shiftEnd = open.special ? null : shifts[open.shift]?.end;

@@ -126,12 +126,20 @@ adminRouter.get("/attendance", async (req, res) => {
     typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
       ? req.query.date
       : dateStr();
-  type Row = AttendanceRow & { user_name: string; has_in: boolean; has_out: boolean };
+  type Row = AttendanceRow & {
+    user_name: string;
+    has_in: boolean;
+    has_out: boolean;
+    break_start: Date | null;
+    break_end: Date | null;
+  };
   const rows = await sql<Row[]>`
     SELECT a.*, u.name AS user_name,
       EXISTS (SELECT 1 FROM attendance_photos p WHERE p.attendance_id = a.id AND p.kind = 'in')  AS has_in,
-      EXISTS (SELECT 1 FROM attendance_photos p WHERE p.attendance_id = a.id AND p.kind = 'out') AS has_out
+      EXISTS (SELECT 1 FROM attendance_photos p WHERE p.attendance_id = a.id AND p.kind = 'out') AS has_out,
+      b.break_start, b.break_end
     FROM attendance a JOIN users u ON u.id = a.user_id
+    LEFT JOIN breaks b ON b.user_id = a.user_id AND b.date = a.date
     WHERE a.date = ${date}
     ORDER BY a.check_in
   `;
@@ -149,6 +157,8 @@ adminRouter.get("/attendance", async (req, res) => {
       distanceM: r.distance_m,
       photoIn: r.has_in,
       photoOut: r.has_out,
+      breakStart: r.break_start,
+      breakEnd: r.break_end,
     })),
   });
 });

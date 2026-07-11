@@ -45,6 +45,15 @@ export interface AttendanceRow {
   distance_m: number | null;
 }
 
+export interface BreakRow {
+  id: number;
+  user_id: number;
+  date: string;
+  break_start: Date;
+  break_end: Date | null;
+  distance_m: number | null;
+}
+
 export interface RequestRow {
   id: number;
   user_id: number;

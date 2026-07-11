@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Sk } from "@/components/ui/skeleton";
 import { TabBar } from "@/components/tab-bar";
 import { Ic, RIc } from "@/components/icons";
-import { useApp, fmtDateLong, fmtTime, fmtDuration, greeting, type LogEntry } from "@/app/store";
+import { useApp, checkLocation, fmtDateLong, fmtTime, fmtDuration, greeting, type LogEntry } from "@/app/store";
 
 export function statusChip(r: Pick<LogEntry, "late" | "earlyOut" | "special">) {
   if (r.special) return { label: "Khusus", bg: "var(--tint)", color: "var(--muted)" };
@@ -63,6 +63,75 @@ function QuickTile({
       </span>
       <span className="text-[11.5px] font-bold text-ink">{label}</span>
     </button>
+  );
+}
+
+/** Istirahat clock in/out — one per day, non-Sopir only, GPS-gated but no
+ *  face-scan (unlike work check-in/out). Shown only while checked into work. */
+function BreakCard() {
+  const { breakAllowed, attendance, todayBreak, startBreak, endBreak } = useApp();
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  if (!breakAllowed || attendance !== "in") return null;
+
+  const started = todayBreak?.breakStart ?? null;
+  const ended = todayBreak?.breakEnd ?? null;
+
+  async function tap() {
+    setBusy(true);
+    setError(null);
+    try {
+      const loc = await checkLocation();
+      if (loc.kind === "gps-off") {
+        setError("GPS tidak aktif — aktifkan lokasi untuk mencatat istirahat.");
+        return;
+      }
+      if (!started) await startBreak({ lat: loc.lat, lng: loc.lng });
+      else await endBreak({ lat: loc.lat, lng: loc.lng });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 bg-card border border-line rounded-[16px] px-4 py-[14px]">
+      <div className="flex items-center gap-3">
+        <span className="w-9 h-9 rounded-[11px] bg-tint text-primary flex items-center justify-center shrink-0">
+          {Ic.clock}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-extrabold text-ink">
+            {ended ? "Istirahat selesai" : started ? "Sedang istirahat" : "Istirahat"}
+          </div>
+          <div className="text-[11.5px] text-muted font-semibold tabular-nums">
+            {ended
+              ? `${fmtTime(new Date(started!))} – ${fmtTime(new Date(ended))}`
+              : started
+                ? `Sejak ${fmtTime(new Date(started))}`
+                : "Belum diambil hari ini"}
+          </div>
+        </div>
+        {!ended && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={tap}
+            className="text-[12px] font-extrabold px-[14px] py-[8px] rounded-[11px] border-none cursor-pointer text-white disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ background: started ? "var(--warn)" : "var(--primary)" }}
+          >
+            {busy ? "…" : started ? "Selesai" : "Mulai"}
+          </button>
+        )}
+      </div>
+      {error && (
+        <div className="mt-[10px] text-[11.5px] font-semibold" style={{ color: "var(--danger)" }}>
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -126,7 +195,7 @@ function HomeSkeleton() {
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { ready, user, attendance, checkInAt, todayShifts, todayHoliday, clockOpen, log } = useApp();
+  const { ready, user, attendance, checkInAt, todayShifts, todayHoliday, clockOpen, todayBreak, log } = useApp();
   const now = useClock();
   const [delayDone, setDelayDone] = React.useState(false);
   React.useEffect(() => {
@@ -139,6 +208,7 @@ export function HomeScreen() {
   const checkedIn = attendance === "in" && checkInAt;
   const restDay = todayShifts.length === 0;
   const schedule = shiftText(todayShifts);
+  const breakOpen = !!todayBreak?.breakStart && !todayBreak.breakEnd;
 
   return (
     <div className="flex flex-col flex-1 relative bg-bg px-6 pt-safe-60 pb-[100px]">
@@ -206,12 +276,21 @@ export function HomeScreen() {
           when the shift window is open (workday, not holiday, before end). */}
       {checkedIn ? (
         <>
-          <Button variant="primary" className="mt-[18px]" onClick={() => navigate("/checkout/locating")}>
+          <Button
+            variant="primary"
+            className="mt-[18px]"
+            disabled={breakOpen}
+            onClick={() => navigate("/checkout/locating")}
+          >
             {Ic.logout}Presensi Pulang
           </Button>
           <div className="flex items-center justify-center gap-[6px] mt-3 text-[12.5px] text-muted font-semibold text-center">
             {Ic.pin}
-            <span>Hanya aktif dalam radius 50 m dari gereja</span>
+            <span>
+              {breakOpen
+                ? "Selesaikan istirahat dulu sebelum presensi pulang"
+                : "Hanya aktif dalam radius 50 m dari gereja"}
+            </span>
           </div>
         </>
       ) : attendance === "none" && clockOpen ? (
@@ -236,6 +315,8 @@ export function HomeScreen() {
           </span>
         </div>
       ) : null}
+
+      <BreakCard />
 
       {/* quick actions */}
       <div className="flex gap-2 mt-5">

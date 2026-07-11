@@ -5,6 +5,7 @@ import {
   clearToken,
   getToken,
   setToken,
+  type ApiBreak,
   type ApiConfig,
   type ApiRequest,
   type ApiToday,
@@ -157,6 +158,12 @@ interface AppState {
   todayHoliday: string | null;
   /** Whether clock-in is allowed now (workday, not holiday, before shift end). */
   clockOpen: boolean;
+  /** Today's istirahat session, if one was taken (or is in progress). */
+  todayBreak: ApiBreak | null;
+  /** Whether this position can take a break at all (false for Sopir). */
+  breakAllowed: boolean;
+  startBreak: (loc: Coords) => Promise<void>;
+  endBreak: (loc: Coords) => Promise<void>;
   lastDistanceM: number;
   setLastDistanceM: (n: number) => void;
   /** Live user position from the last locating check — drives the geofence map. */
@@ -240,6 +247,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [todayShifts, setTodayShifts] = React.useState<{ start: string; end: string }[]>([]);
   const [todayHoliday, setTodayHoliday] = React.useState<string | null>(null);
   const [clockOpen, setClockOpen] = React.useState(false);
+  const [todayBreak, setTodayBreak] = React.useState<ApiBreak | null>(null);
   const [log, setLog] = React.useState<LogEntry[]>([]);
   const [requests, setRequests] = React.useState<RequestRecord[]>([]);
   const [lastDistanceM, setLastDistanceM] = React.useState(18);
@@ -256,12 +264,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setClockOpen(me.clockOpen);
     if (me.user.role === "employee") {
       // Attendance and request endpoints are employee-only.
-      const [logRows, reqRows] = await Promise.all([api.attendanceLog(), api.requests()]);
+      const [logRows, reqRows, brk] = await Promise.all([
+        api.attendanceLog(),
+        api.requests(),
+        api.breakToday(),
+      ]);
       setLog(logRows.map(toLogEntry));
       setRequests(reqRows);
+      setTodayBreak(brk.break);
     } else {
       setLog([]);
       setRequests([]);
+      setTodayBreak(null);
     }
     setAuthed(true);
   }, []);
@@ -300,6 +314,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     todayShifts,
     todayHoliday,
     clockOpen,
+    todayBreak,
+    breakAllowed: apiUser.position !== "sopir",
     lastDistanceM,
     setLastDistanceM,
     lastPos,
@@ -324,6 +340,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setTodayDone(false);
       setLog([]);
       setRequests([]);
+      setTodayBreak(null);
     },
     checkIn: async (photo) => {
       const res = await api.checkIn({ ...pendingLoc.current, photo: photo ?? undefined });
@@ -337,7 +354,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       setTodayDone(false);
       setLastDistanceM(res.distanceM);
-      setLog((await api.attendanceLog()).map(toLogEntry));
+      const [logRows, brk] = await Promise.all([api.attendanceLog(), api.breakToday()]);
+      setLog(logRows.map(toLogEntry));
+      setTodayBreak(brk.break);
     },
     checkOut: async (photo) => {
       const res = await api.checkOut({ ...pendingLoc.current, photo: photo ?? undefined });
@@ -350,6 +369,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setLog(logRows.map(toLogEntry));
     },
     refresh: loadSession,
+    startBreak: async (loc) => {
+      const res = await api.breakStart(loc);
+      setTodayBreak({ breakStart: res.breakStart, breakEnd: null });
+    },
+    endBreak: async (loc) => {
+      const res = await api.breakEnd(loc);
+      setTodayBreak({ breakStart: res.breakStart, breakEnd: res.breakEnd });
+    },
     submitLeave: async (data) => {
       const res = await api.submitLeave(data);
       const [me, reqRows] = await Promise.all([api.me(), api.requests()]);

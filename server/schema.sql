@@ -70,6 +70,21 @@ CREATE TABLE IF NOT EXISTS attendance_photos (
   UNIQUE (attendance_id, kind)
 );
 
+-- Break (istirahat) sessions — non-Sopir positions, one per day. Both ends
+-- are geofence-gated the same way work check-in/out are: the employee must
+-- be at church at the moment they tap, then they're free to leave until the
+-- next tap.
+CREATE TABLE IF NOT EXISTS breaks (
+  id          INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id     INT NOT NULL REFERENCES users(id),
+  date        TEXT NOT NULL,           -- YYYY-MM-DD, church-local
+  break_start TIMESTAMPTZ NOT NULL,
+  break_end   TIMESTAMPTZ,
+  distance_m  INT,
+  UNIQUE (user_id, date)
+);
+CREATE INDEX IF NOT EXISTS breaks_user_date ON breaks (user_id, date DESC);
+
 CREATE INDEX IF NOT EXISTS attendance_user_date ON attendance (user_id, date DESC);
 CREATE INDEX IF NOT EXISTS requests_user_id ON requests (user_id, id DESC);
 CREATE INDEX IF NOT EXISTS requests_lembur_caps ON requests (user_id, kind, start_date);
