@@ -9,6 +9,7 @@
     "server:dev": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx --watch server/index.ts",
     "db:setup": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx server/setup.ts",
     "seed:users": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx server/seed-users.ts",
+    "reset:activity": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx server/reset-activity.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
