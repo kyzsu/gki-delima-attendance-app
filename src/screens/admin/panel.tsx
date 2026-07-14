@@ -1,12 +1,11 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Seg } from "@/components/ui/segmented";
 import { Note } from "@/components/ui/note";
 import { Sk } from "@/components/ui/skeleton";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Pager } from "@/components/ui/pagination";
-import { usePaged } from "@/lib/use-paged";
+import { DataTable } from "@/components/ui/data-table";
 import { Ic, RIc } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { useApp, fmtTime, fmtDateLong, greeting } from "@/app/store";
@@ -143,146 +142,178 @@ function PhotoBlank() {
   );
 }
 
+const requestColumns: ColumnDef<AdminRequest>[] = [
+  {
+    id: "title",
+    accessorKey: "title",
+    header: "Pengajuan",
+    meta: { label: "Pengajuan", cellClassName: "font-bold" },
+    cell: ({ row }) => {
+      const r = row.original;
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-muted flex shrink-0">{KIND_ICON[r.kind]}</span>
+          <span className="truncate max-w-[104px]">{r.title}</span>
+        </div>
+      );
+    },
+  },
+  {
+    id: "userName",
+    accessorKey: "userName",
+    header: "Karyawan",
+    meta: { label: "Karyawan" },
+    cell: ({ row }) => (
+      <>
+        <span className="block truncate max-w-[120px] text-[12px] font-semibold text-ink">{row.original.userName}</span>
+        <span className="block truncate max-w-[120px] text-[11px] text-muted">{row.original.detail}</span>
+      </>
+    ),
+  },
+  {
+    id: "status",
+    accessorKey: "status",
+    header: "Status",
+    enableSorting: false,
+    enableHiding: false,
+    meta: { align: "right" },
+    cell: ({ row }) => (
+      <div className="flex items-center justify-end gap-1">
+        <StatusChip status={row.original.status} />
+        <span className="text-line2 flex shrink-0">{RIc.chevR}</span>
+      </div>
+    ),
+  },
+];
+
 /** Admin requests as a paginated table; rows open the decision sheet. */
 function RequestsTable({ rows, onOpen }: { rows: AdminRequest[]; onOpen: (r: AdminRequest) => void }) {
-  const paged = usePaged(rows, 10);
-  return (
-    <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Pengajuan</TableHead>
-            <TableHead>Karyawan</TableHead>
-            <TableHead className="text-right">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {paged.pageItems.map((r) => (
-            <TableRow key={r.id} className="cursor-pointer" onClick={() => onOpen(r)}>
-              <TableCell className="font-bold">
-                <div className="flex items-center gap-2">
-                  <span className="text-muted flex shrink-0">{KIND_ICON[r.kind]}</span>
-                  <span className="truncate max-w-[104px]">{r.title}</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                <span className="block truncate max-w-[120px] text-[12px] font-semibold text-ink">{r.userName}</span>
-                <span className="block truncate max-w-[120px] text-[11px] text-muted">{r.detail}</span>
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex items-center justify-end gap-1">
-                  <StatusChip status={r.status} />
-                  <span className="text-line2 flex shrink-0">{RIc.chevR}</span>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <Pager
-        page={paged.page}
-        pageCount={paged.pageCount}
-        rangeStart={paged.rangeStart}
-        rangeEnd={paged.rangeEnd}
-        total={paged.total}
-        onPage={paged.setPage}
-      />
-    </>
-  );
+  return <DataTable columns={requestColumns} data={rows} onRowClick={onOpen} getRowId={(r) => String(r.id)} />;
 }
 
-/** Today's attendance sessions as a paginated table, selfie thumbnails inline. */
+const STATUS_RANK = (s: AdminSession) => (s.late ? 3 : s.earlyOut ? 2 : s.special ? 0 : 1);
+
+const sessionColumns: ColumnDef<AdminSession>[] = [
+  {
+    id: "userName",
+    accessorKey: "userName",
+    header: "Karyawan",
+    meta: { label: "Karyawan", cellClassName: "font-bold" },
+    enableHiding: false,
+    cell: ({ row }) => {
+      const s = row.original;
+      return (
+        <>
+          <span className="block truncate max-w-[84px]">{s.userName}</span>
+          {s.shift > 0 && <span className="block text-[10.5px] text-muted font-semibold">Sesi 2</span>}
+          {s.distanceM !== null && (
+            <span className="block text-[10.5px] text-muted tabular-nums">±{s.distanceM} m</span>
+          )}
+        </>
+      );
+    },
+  },
+  {
+    id: "checkIn",
+    accessorKey: "checkIn",
+    header: "Masuk",
+    meta: { label: "Masuk" },
+    cell: ({ row }) => {
+      const s = row.original;
+      return (
+        <div className="flex items-center gap-[6px]">
+          {s.photoIn ? (
+            <AuthImg src={photoUrl(s.id, "in")} alt={`Masuk ${s.userName}`} className="w-8 h-8" />
+          ) : (
+            <PhotoBlank />
+          )}
+          <span className="text-[11px] tabular-nums text-ink">
+            {fmtTime(new Date(s.checkIn))}
+            {s.late && <span className="block" style={{ color: "var(--danger)" }}>Telat</span>}
+          </span>
+        </div>
+      );
+    },
+  },
+  {
+    id: "checkOut",
+    accessorFn: (s) => s.checkOut ?? "",
+    header: "Pulang",
+    meta: { label: "Pulang" },
+    cell: ({ row }) => {
+      const s = row.original;
+      if (!s.checkOut) return <span className="text-[11px] text-muted">Belum pulang</span>;
+      return (
+        <div className="flex items-center gap-[6px]">
+          {s.photoOut ? (
+            <AuthImg src={photoUrl(s.id, "out")} alt={`Pulang ${s.userName}`} className="w-8 h-8" />
+          ) : (
+            <PhotoBlank />
+          )}
+          <span className="text-[11px] tabular-nums text-ink">
+            {fmtTime(new Date(s.checkOut))}
+            {s.earlyOut && <span className="block" style={{ color: "var(--warn)" }}>Cepat</span>}
+          </span>
+        </div>
+      );
+    },
+  },
+  {
+    id: "break",
+    accessorFn: (s) => s.breakStart ?? "",
+    header: "Istirahat",
+    enableSorting: false,
+    meta: { label: "Istirahat" },
+    cell: ({ row }) => {
+      const s = row.original;
+      if (s.breakStart && s.breakEnd) {
+        return (
+          <span className="text-[11px] tabular-nums text-ink">
+            {fmtTime(new Date(s.breakStart))}–{fmtTime(new Date(s.breakEnd))}
+          </span>
+        );
+      }
+      if (s.breakStart) {
+        return (
+          <span className="text-[11px] font-semibold" style={{ color: "var(--warn)" }}>
+            Sejak {fmtTime(new Date(s.breakStart))}
+          </span>
+        );
+      }
+      return <span className="text-[11px] text-muted">—</span>;
+    },
+  },
+  {
+    id: "status",
+    accessorFn: STATUS_RANK,
+    header: "Status",
+    enableHiding: false,
+    meta: { align: "right" },
+    cell: ({ row }) => {
+      const chip = statusChip(row.original);
+      return (
+        <span
+          className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
+          style={{ background: chip.bg, color: chip.color }}
+        >
+          {chip.label}
+        </span>
+      );
+    },
+  },
+];
+
+/** Today's attendance sessions as a paginated table, selfie thumbnails inline.
+ *  Istirahat is hidden by default (toggleable) — Karyawan/Masuk/Pulang/Status
+ *  already fill a 430px screen on their own. */
 function SessionsTable({ sessions }: { sessions: AdminSession[] }) {
-  const paged = usePaged(sessions, 10);
   return (
-    <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Karyawan</TableHead>
-            <TableHead>Masuk</TableHead>
-            <TableHead>Pulang</TableHead>
-            <TableHead>Istirahat</TableHead>
-            <TableHead className="text-right">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {paged.pageItems.map((s) => {
-            const chip = statusChip(s);
-            return (
-              <TableRow key={s.id}>
-                <TableCell className="font-bold">
-                  <span className="block truncate max-w-[84px]">{s.userName}</span>
-                  {s.shift > 0 && <span className="block text-[10.5px] text-muted font-semibold">Sesi 2</span>}
-                  {s.distanceM !== null && (
-                    <span className="block text-[10.5px] text-muted tabular-nums">±{s.distanceM} m</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-[6px]">
-                    {s.photoIn ? (
-                      <AuthImg src={photoUrl(s.id, "in")} alt={`Masuk ${s.userName}`} className="w-8 h-8" />
-                    ) : (
-                      <PhotoBlank />
-                    )}
-                    <span className="text-[11px] tabular-nums text-ink">
-                      {fmtTime(new Date(s.checkIn))}
-                      {s.late && <span className="block" style={{ color: "var(--danger)" }}>Telat</span>}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {s.checkOut ? (
-                    <div className="flex items-center gap-[6px]">
-                      {s.photoOut ? (
-                        <AuthImg src={photoUrl(s.id, "out")} alt={`Pulang ${s.userName}`} className="w-8 h-8" />
-                      ) : (
-                        <PhotoBlank />
-                      )}
-                      <span className="text-[11px] tabular-nums text-ink">
-                        {fmtTime(new Date(s.checkOut))}
-                        {s.earlyOut && <span className="block" style={{ color: "var(--warn)" }}>Cepat</span>}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-muted">Belum pulang</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {s.breakStart && s.breakEnd ? (
-                    <span className="text-[11px] tabular-nums text-ink">
-                      {fmtTime(new Date(s.breakStart))}–{fmtTime(new Date(s.breakEnd))}
-                    </span>
-                  ) : s.breakStart ? (
-                    <span className="text-[11px] font-semibold" style={{ color: "var(--warn)" }}>
-                      Sejak {fmtTime(new Date(s.breakStart))}
-                    </span>
-                  ) : (
-                    <span className="text-[11px] text-muted">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <span
-                    className="text-[10.5px] font-extrabold px-[10px] py-1 rounded-full whitespace-nowrap"
-                    style={{ background: chip.bg, color: chip.color }}
-                  >
-                    {chip.label}
-                  </span>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-      <Pager
-        page={paged.page}
-        pageCount={paged.pageCount}
-        rangeStart={paged.rangeStart}
-        rangeEnd={paged.rangeEnd}
-        total={paged.total}
-        onPage={paged.setPage}
-      />
-    </>
+    <DataTable
+      columns={sessionColumns}
+      data={sessions}
+      initialVisibility={{ break: false }}
+      getRowId={(s) => String(s.id)}
+    />
   );
 }
 
